@@ -83,6 +83,34 @@ def q(sql: str) -> pd.DataFrame:
     return get_client().query_df(sql)
 
 
+# ── Affichage : étiquettes de valeurs sur toutes les barres ───────────────────
+_render = st.plotly_chart
+
+def _lbl(v) -> str:
+    """Formate une valeur de barre : entiers avec séparateur, décimaux à 1 chiffre."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return ""
+    if v == 0:
+        return ""
+    if v == int(v):
+        return f"{int(v):,}".replace(",", " ")
+    return f"{v:.1f}"
+
+def show(fig, **kwargs):
+    """Rend une figure Plotly en ajoutant les valeurs lisibles sur chaque barre."""
+    for tr in fig.data:
+        if tr.type == "bar":
+            vals = tr.x if tr.orientation == "h" else tr.y
+            if vals is not None:
+                tr.text = [_lbl(v) for v in vals]
+                tr.textposition = "auto"
+                tr.cliponaxis = False
+                tr.textfont = dict(size=11)
+    _render(fig, **kwargs)
+
+
 # ── Filter helpers ────────────────────────────────────────────────────────────
 def _esc(v: str) -> str:
     return v.replace("'", "''")
@@ -217,7 +245,7 @@ def tab_overview(start, end, entities, platforms, types, langs, gran):
             fig.add_trace(go.Scatter(x=ts["bucket"], y=ts["neg"], name="Négatif", fill="tozeroy", line_color=C_NEG))
             fig.add_trace(go.Scatter(x=ts["bucket"], y=ts["neu"], name="Neutre",  line_color=C_NEU))
             fig.update_layout(title=f"Tendance du sentiment · {gran}", height=280, margin=dict(t=40,b=20))
-            st.plotly_chart(fig, use_container_width=True)
+            show(fig, use_container_width=True)
     with col2:
         fig2 = go.Figure(go.Pie(
             labels=["Positif","Négatif","Neutre"],
@@ -226,7 +254,7 @@ def tab_overview(start, end, entities, platforms, types, langs, gran):
             marker_colors=[C_POS, C_NEG, C_NEU],
         ))
         fig2.update_layout(title="Répartition", height=280, margin=dict(t=40,b=0))
-        st.plotly_chart(fig2, use_container_width=True)
+        show(fig2, use_container_width=True)
 
     # Top themes + Volume par plateforme
     th = q(f"""
@@ -242,13 +270,13 @@ def tab_overview(start, end, entities, platforms, types, langs, gran):
             fig3 = px.bar(th, x="mentions", y="theme", orientation="h",
                           title="Top thèmes (mentions)", color_discrete_sequence=[C_OWN])
             fig3.update_layout(height=280, margin=dict(t=40,b=20), showlegend=False)
-            st.plotly_chart(fig3, use_container_width=True)
+            show(fig3, use_container_width=True)
     with col4:
         if not bp.empty:
             fig4 = px.bar(bp, x="platform", y="total", title="Volume par plateforme",
                           color="platform", color_discrete_sequence=PAL)
             fig4.update_layout(height=280, margin=dict(t=40,b=20), showlegend=False)
-            st.plotly_chart(fig4, use_container_width=True)
+            show(fig4, use_container_width=True)
 
 
 def tab_competition(start, end, entities, platforms, types, langs, gran):
@@ -298,7 +326,7 @@ def tab_competition(start, end, entities, platforms, types, langs, gran):
             hole=0.55, marker_colors=col_sov,
         ))
         fig.update_layout(title="Part de voix (mentions)", height=320, margin=dict(t=40,b=0))
-        st.plotly_chart(fig, use_container_width=True)
+        show(fig, use_container_width=True)
     with col2:
         groups = brands_df.groupby("is_own")[["pos","neg","boy","records"]].sum().reset_index()
         groups["label"] = groups["is_own"].map({1:"Groupe LabelVie", 0:"Concurrents"})
@@ -309,7 +337,7 @@ def tab_competition(start, end, entities, platforms, types, langs, gran):
         for label, col, color in [("Positif %","pos_rate",C_POS),("Négatif %","neg_rate",C_NEG),("Boycott %","boycott_rate",C_BOY)]:
             fig2.add_trace(go.Bar(name=label, x=groups["label"], y=groups[col], marker_color=color))
         fig2.update_layout(title="Groupe LabelVie vs Concurrents", height=320, margin=dict(t=40,b=20))
-        st.plotly_chart(fig2, use_container_width=True)
+        show(fig2, use_container_width=True)
 
     # Boycott propagation par enseigne
     bt = q(f"""
@@ -325,7 +353,7 @@ def tab_competition(start, end, entities, platforms, types, langs, gran):
             fig3 = px.line(bt_filt, x="bucket", y="boycott", color="entity",
                            color_discrete_sequence=PAL, markers=True)
             fig3.update_layout(height=300, margin=dict(t=20,b=20), yaxis_title="Signaux boycott")
-            st.plotly_chart(fig3, use_container_width=True)
+            show(fig3, use_container_width=True)
         else:
             st.info("Aucun signal de boycott sur la période.")
 
@@ -334,7 +362,7 @@ def tab_competition(start, end, entities, platforms, types, langs, gran):
                   orientation="h", title="Engagement par marque",
                   color="is_own", color_discrete_map={1: C_OWN, 0: C_COMP})
     fig4.update_layout(height=350, margin=dict(t=40,b=20), showlegend=False)
-    st.plotly_chart(fig4, use_container_width=True)
+    show(fig4, use_container_width=True)
 
     # Tableau comparatif
     st.subheader("Tableau comparatif")
@@ -362,14 +390,14 @@ def tab_sentiment(start, end, entities, platforms, types, langs, gran):
         for label, col, color in [("Positif","positive",C_POS),("Négatif","negative",C_NEG),("Neutre","neutral",C_NEU)]:
             fig.add_trace(go.Bar(name=label, x=by_entity["entity"], y=by_entity[col], marker_color=color))
         fig.update_layout(barmode="stack", title="Sentiment par marque", height=320, margin=dict(t=40,b=20))
-        st.plotly_chart(fig, use_container_width=True)
+        show(fig, use_container_width=True)
     with col2:
         fig2 = px.bar(by_entity.sort_values("avg_score"), x="avg_score", y="entity",
                       orientation="h", title="Score moyen par marque",
                       color="avg_score", color_continuous_scale=["#ef4444","#94a3b8","#22c55e"],
                       color_continuous_midpoint=0)
         fig2.update_layout(height=320, margin=dict(t=40,b=20), showlegend=False)
-        st.plotly_chart(fig2, use_container_width=True)
+        show(fig2, use_container_width=True)
 
     # Heatmap brand × theme
     hm = q(f"""
@@ -378,12 +406,24 @@ def tab_sentiment(start, end, entities, platforms, types, langs, gran):
         GROUP BY entity, theme
     """)
     if not hm.empty:
-        st.subheader("Matrice marque × thème (score moyen, vert = positif)")
-        pivot = hm.pivot_table(index="entity", columns="theme", values="avg_score", fill_value=None)
-        fig3 = px.imshow(pivot, color_continuous_scale=["#ef4444","#f8fafc","#22c55e"],
-                         color_continuous_midpoint=0, text_auto=".2f", aspect="auto")
-        fig3.update_layout(height=420, margin=dict(t=20,b=20))
-        st.plotly_chart(fig3, use_container_width=True)
+        st.subheader("Matrice marque × thème (score moyen + nombre de mentions, vert = positif)")
+        score_pivot = hm.pivot_table(index="entity", columns="theme", values="avg_score")
+        cnt_pivot   = hm.pivot_table(index="entity", columns="theme", values="total")
+        # Texte par case : score moyen + nombre de mentions (n=...)
+        text = score_pivot.copy().astype(object)
+        for i in score_pivot.index:
+            for j in score_pivot.columns:
+                s = score_pivot.loc[i, j]
+                n = cnt_pivot.loc[i, j]
+                text.loc[i, j] = "" if pd.isna(s) else f"{s:.2f}<br>n={int(n)}"
+        fig3 = px.imshow(score_pivot, color_continuous_scale=["#ef4444","#f8fafc","#22c55e"],
+                         color_continuous_midpoint=0, aspect="auto")
+        fig3.update_traces(
+            text=text.values, texttemplate="%{text}", textfont=dict(size=10),
+            hovertemplate="%{y} · %{x}<br>Score moyen : %{z:.2f}<extra></extra>",
+        )
+        fig3.update_layout(height=460, margin=dict(t=20, b=20))
+        show(fig3, use_container_width=True)
 
 
 def tab_themes(start, end, entities, platforms, types, langs, gran):
@@ -407,13 +447,13 @@ def tab_themes(start, end, entities, platforms, types, langs, gran):
         fig = px.bar(freq, x="mentions", y="theme", orientation="h",
                      title="Fréquence des thèmes", color_discrete_sequence=[C_OWN])
         fig.update_layout(height=360, margin=dict(t=40,b=20), showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        show(fig, use_container_width=True)
     with col2:
         fig2 = go.Figure()
         for label, col, color in [("Positif","positive",C_POS),("Négatif","negative",C_NEG),("Neutre","neutral",C_NEU)]:
             fig2.add_trace(go.Bar(name=label, y=freq["theme"], x=freq[col], orientation="h", marker_color=color))
         fig2.update_layout(barmode="stack", title="Sentiment par thème", height=360, margin=dict(t=40,b=20))
-        st.plotly_chart(fig2, use_container_width=True)
+        show(fig2, use_container_width=True)
 
     trend = q(f"""
         SELECT {bkt} bucket, theme, count() mentions
@@ -425,7 +465,7 @@ def tab_themes(start, end, entities, platforms, types, langs, gran):
         fig3 = px.line(trend, x="bucket", y="mentions", color="theme",
                        title=f"Évolution des thèmes · {gran}", color_discrete_sequence=PAL)
         fig3.update_layout(height=320, margin=dict(t=40,b=20))
-        st.plotly_chart(fig3, use_container_width=True)
+        show(fig3, use_container_width=True)
 
 
 def tab_boycott(start, end, entities, platforms, types, langs, gran):
@@ -451,7 +491,7 @@ def tab_boycott(start, end, entities, platforms, types, langs, gran):
             yaxis2=dict(title="Nb mentions", side="right", overlaying="y", showgrid=False),
             margin=dict(t=40,b=20),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        show(fig, use_container_width=True)
 
     by_entity   = q(f"SELECT entity, {BOY} boycott, {REC} total FROM {DT} WHERE {w} GROUP BY entity ORDER BY boycott DESC")
     by_platform = q(f"SELECT platform, {BOY} boycott, {REC} total FROM {DT} WHERE {w} GROUP BY platform ORDER BY boycott DESC")
@@ -463,19 +503,19 @@ def tab_boycott(start, end, entities, platforms, types, langs, gran):
             fig2 = px.bar(by_entity, x="entity", y="boycott", title="Boycott par marque",
                           color_discrete_sequence=[C_BOY])
             fig2.update_layout(height=300, margin=dict(t=40,b=20), showlegend=False)
-            st.plotly_chart(fig2, use_container_width=True)
+            show(fig2, use_container_width=True)
     with col2:
         if not by_platform.empty:
             fig3 = go.Figure(go.Pie(labels=by_platform["platform"], values=by_platform["boycott"],
                                     hole=0.52, marker_colors=PAL))
             fig3.update_layout(title="Boycott par plateforme", height=300, margin=dict(t=40,b=0))
-            st.plotly_chart(fig3, use_container_width=True)
+            show(fig3, use_container_width=True)
     with col3:
         if not by_lang.empty:
             fig4 = px.bar(by_lang, x="boycott", y="language", orientation="h",
                           title="Boycott par langue", color_discrete_sequence=[C_COMP])
             fig4.update_layout(height=300, margin=dict(t=40,b=20), showlegend=False)
-            st.plotly_chart(fig4, use_container_width=True)
+            show(fig4, use_container_width=True)
 
 
 def tab_engagement(start, end, entities, platforms, types, langs, gran):
@@ -523,14 +563,14 @@ def tab_engagement(start, end, entities, platforms, types, langs, gran):
             fig.update_layout(title="Engagement par sentiment", height=320,
                               yaxis=dict(side="left"), yaxis2=dict(side="right", overlaying="y", showgrid=False),
                               margin=dict(t=40,b=20))
-            st.plotly_chart(fig, use_container_width=True)
+            show(fig, use_container_width=True)
     with col2:
         if not by_plat.empty:
             fig2 = go.Figure()
             for label, col, color in [("Likes","likes",C_POS),("Partages","shares",C_OWN),("Commentaires","comments",C_NEU)]:
                 fig2.add_trace(go.Bar(name=label, x=by_plat["platform"], y=by_plat[col], marker_color=color))
             fig2.update_layout(title="Détail par plateforme", height=320, margin=dict(t=40,b=20))
-            st.plotly_chart(fig2, use_container_width=True)
+            show(fig2, use_container_width=True)
 
     col3, col4 = st.columns([2, 1])
     with col3:
@@ -539,14 +579,14 @@ def tab_engagement(start, end, entities, platforms, types, langs, gran):
             fig3 = px.area(trend, x="bucket", y="engagement", title=f"Tendance d'engagement · {gran}",
                            color_discrete_sequence=[C_OWN])
             fig3.update_layout(height=300, margin=dict(t=40,b=20))
-            st.plotly_chart(fig3, use_container_width=True)
+            show(fig3, use_container_width=True)
     with col4:
         if not by_type.empty:
             labels = by_type["record_type"].map({"post":"Post","comment":"Commentaire"}).fillna(by_type["record_type"])
             fig4 = go.Figure(go.Pie(labels=labels, values=by_type["total_eng"],
                                     hole=0.55, marker_colors=[C_OWN, C_COMP]))
             fig4.update_layout(title="Post vs Commentaire", height=300, margin=dict(t=40,b=0))
-            st.plotly_chart(fig4, use_container_width=True)
+            show(fig4, use_container_width=True)
 
 
 def tab_language(start, end, entities, platforms, types, langs, gran):
@@ -572,19 +612,19 @@ def tab_language(start, end, entities, platforms, types, langs, gran):
         fig = px.bar(dist, x="language", y="records", title="Volume par langue",
                      color="language", color_discrete_sequence=PAL)
         fig.update_layout(height=320, margin=dict(t=40,b=20), showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        show(fig, use_container_width=True)
     with col2:
         fig2 = go.Figure()
         for label, col, color in [("Positif","positives",C_POS),("Négatif","negatives",C_NEG),("Neutre","neutrals",C_NEU)]:
             fig2.add_trace(go.Bar(name=label, x=dist["language"], y=dist[col], marker_color=color))
         fig2.update_layout(barmode="stack", title="Sentiment par langue", height=320, margin=dict(t=40,b=20))
-        st.plotly_chart(fig2, use_container_width=True)
+        show(fig2, use_container_width=True)
 
     if not by_plat.empty:
         fig3 = px.bar(by_plat, x="platform", y="records", color="language",
                       title="Langue × Plateforme", color_discrete_sequence=PAL)
         fig3.update_layout(barmode="stack", height=320, margin=dict(t=40,b=20))
-        st.plotly_chart(fig3, use_container_width=True)
+        show(fig3, use_container_width=True)
 
 
 def tab_topics():
@@ -657,12 +697,12 @@ def tab_authors(platforms):
         fig = px.bar(top10, x="total_engagement", y="author", orientation="h",
                      title="Top auteurs — engagement", color_discrete_sequence=[C_OWN])
         fig.update_layout(height=320, margin=dict(t=40,b=20), showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
+        show(fig, use_container_width=True)
     with col2:
         fig2 = px.bar(det10, x="negative_pct", y="author", orientation="h",
                       title="Détracteurs (% négatif élevé)", color_discrete_sequence=[C_NEG])
         fig2.update_layout(height=320, margin=dict(t=40,b=20), showlegend=False)
-        st.plotly_chart(fig2, use_container_width=True)
+        show(fig2, use_container_width=True)
 
     st.subheader("Détail des auteurs")
     disp = d.rename(columns={
