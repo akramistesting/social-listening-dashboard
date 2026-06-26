@@ -737,8 +737,8 @@ def main():
         st.header("Filtres")
 
         # Période
-        date_min = meta["date_min"] or "2024-01-01"
-        date_max = meta["date_max"] or str(date.today())
+        date_min = str(meta["date_min"] or "2024-01-01")[:10]
+        date_max = str(meta["date_max"] or str(date.today()))[:10]
         preset = st.radio("Période", ["Tout","Année","90 jours","30 jours"], horizontal=True)
         d_max = datetime.strptime(date_max, "%Y-%m-%d").date()
         if preset == "30 jours":    d_min = d_max - timedelta(days=30)
