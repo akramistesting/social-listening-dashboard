@@ -4,6 +4,7 @@ Réplique exacte des 10 onglets de serving/web_dashboard_light.py en Streamlit.
 Même table source (social_gold.fct_comment_drillthrough), mêmes requêtes SQL.
 """
 import os
+import html
 from datetime import date, timedelta, datetime
 
 import clickhouse_connect
@@ -740,16 +741,53 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes):
     """)
 
     st.caption(f"{len(df)} résultats")
-    if not df.empty:
-        df["record_date"] = df["record_date"].astype(str).str[:10]
-        df["boycott_signal"] = df["boycott_signal"].apply(lambda x: "🚫" if x else "")
-        df["text"] = df["text"].str[:300]
-        st.dataframe(
-            df[["record_date","platform","entity","theme","overall_sentiment",
-                "boycott_signal","language","text","url"]].reset_index(drop=True),
-            use_container_width=True,
-            height=550,
+    if df.empty:
+        return
+
+    # Rendu en tableau HTML : les emojis et le texte RTL (arabe/darija) s'affichent
+    # nativement, et la colonne « Source » est un lien cliquable vers la publication.
+    sent_color = {"Positif": "#16a34a", "Négatif": "#dc2626", "Neutre": "#64748b"}
+    rows_html = []
+    for _, r in df.iterrows():
+        txt = html.escape(str(r["text"] or "").strip())[:400] or "<span style='color:#94a3b8'>(emoji/réaction sans texte)</span>"
+        sc  = sent_color.get(r["overall_sentiment"], "#64748b")
+        boy = "🚫" if r["boycott_signal"] else ""
+        url = str(r["url"] or "")
+        src = (f"<a href='{html.escape(url)}' target='_blank' "
+               f"style='color:#2563eb;text-decoration:none;white-space:nowrap'>Voir ↗</a>"
+               if url.startswith("http") else "")
+        rows_html.append(
+            "<tr>"
+            f"<td style='white-space:nowrap'>{str(r['record_date'])[:10]}</td>"
+            f"<td>{html.escape(str(r['platform'] or ''))}</td>"
+            f"<td>{html.escape(str(r['entity'] or ''))}</td>"
+            f"<td>{html.escape(str(r['theme'] or ''))}</td>"
+            f"<td style='color:{sc};font-weight:600'>{html.escape(str(r['overall_sentiment'] or ''))}</td>"
+            f"<td style='text-align:center'>{boy}</td>"
+            f"<td>{html.escape(str(r['language'] or ''))}</td>"
+            f"<td style='max-width:480px'>{txt}</td>"
+            f"<td>{src}</td>"
+            "</tr>"
         )
+
+    table = (
+        "<div style='max-height:600px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px'>"
+        "<table style='width:100%;border-collapse:collapse;font-size:13px'>"
+        "<thead><tr style='position:sticky;top:0;background:#1e2530;color:#fff'>"
+        "<th style='padding:6px 8px;text-align:left'>Date</th>"
+        "<th style='padding:6px 8px;text-align:left'>Plateforme</th>"
+        "<th style='padding:6px 8px;text-align:left'>Marque</th>"
+        "<th style='padding:6px 8px;text-align:left'>Thème</th>"
+        "<th style='padding:6px 8px;text-align:left'>Sentiment</th>"
+        "<th style='padding:6px 8px'>Boy.</th>"
+        "<th style='padding:6px 8px;text-align:left'>Langue</th>"
+        "<th style='padding:6px 8px;text-align:left'>Texte</th>"
+        "<th style='padding:6px 8px;text-align:left'>Source</th>"
+        "</tr></thead><tbody>"
+        + "".join(rows_html) +
+        "</tbody></table></div>"
+    )
+    st.markdown(table, unsafe_allow_html=True)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
