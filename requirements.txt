@@ -1,0 +1,39 @@
+# Core AWS
+boto3==1.34.69
+botocore==1.34.69
+
+# Config
+python-dotenv==1.0.1
+
+# HTTP
+requests==2.31.0
+
+# NLP
+google-generativeai>=0.8.0
+scikit-learn==1.4.2
+numpy==1.26.4
+
+# Data warehouse
+clickhouse-connect==0.7.16
+
+# dbt
+dbt-core==1.7.14
+dbt-clickhouse==1.7.2
+
+# Orchestration
+apache-airflow==2.9.1
+
+# Validation
+great-expectations==0.18.15
+
+# Reporting
+pandas==2.2.2
+
+# Web dashboard
+fastapi==0.111.0
+uvicorn==0.29.0
+
+# Testing
+pytest==8.2.0
+pytest-mock==3.14.0
+moto[s3]==5.0.5
