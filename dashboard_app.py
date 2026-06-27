@@ -65,8 +65,7 @@ def check_password() -> bool:
 
 
 # ── ClickHouse ────────────────────────────────────────────────────────────────
-@st.cache_resource
-def get_client():
+def _make_client():
     # Si l'host contient cfargotunnel.com ou ngrok → connexion HTTPS port 443
     use_https = any(x in CH_HOST for x in ["cfargotunnel.com", "ngrok", "trycloudflare.com"])
     return clickhouse_connect.get_client(
@@ -76,12 +75,21 @@ def get_client():
         password=CH_PASS,
         secure=use_https,
         verify=False,
+        # Pas de session_id auto : sinon les requêtes des différents onglets,
+        # exécutées en parallèle par Streamlit, se bloquent mutuellement
+        # ("concurrent queries within the same session").
+        autogenerate_session_id=False,
     )
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def q(sql: str) -> pd.DataFrame:
-    return get_client().query_df(sql)
+    # Un client neuf par requête : pas d'état de session partagé entre threads.
+    client = _make_client()
+    try:
+        return client.query_df(sql)
+    finally:
+        client.close()
 
 
 # ── Affichage : étiquettes de valeurs sur toutes les barres ───────────────────
