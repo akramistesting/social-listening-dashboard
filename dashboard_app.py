@@ -284,12 +284,18 @@ def tab_competition(start, end, entities, platforms, types, langs, gran):
     bkt = _bucket(gran)
     w   = _where(start, end, [], platforms, types, langs)
 
+    # entity vient de DT (côté gauche) — jamais vide ; display_name/brand_group
+    # retombent sur l'entité si absents de dim_brand. Nonidentifié est exclu :
+    # ce n'est pas une marque, et son étiquette vide s'affichait comme « 6 ».
     brands_df = q(f"""
-        SELECT d.entity entity, d.display_name display_name, d.brand_group brand_group, d.is_own is_own,
+        SELECT entity,
+               if(d.display_name = '', entity, d.display_name) AS display_name,
+               if(d.brand_group  = '', entity, d.brand_group)  AS brand_group,
+               toUInt8(d.is_own) AS is_own,
                {REC} records, {POS} pos, {NEG} neg, {NEU} neu, {BOY} boy,
                round(avg(overall_score),3) avg_score
         FROM {DT} dt LEFT JOIN {GOLD}.dim_brand d USING (entity)
-        WHERE {w}
+        WHERE {w} AND entity NOT LIKE 'Nonidentif%'
         GROUP BY entity, display_name, brand_group, is_own
         ORDER BY records DESC
     """)
