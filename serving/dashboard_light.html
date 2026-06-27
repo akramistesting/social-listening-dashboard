@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="fr" data-bs-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Social Listening — LabelVie (Light)</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+:root{
+  --bg:#f0f4f8; --panel:#ffffff; --panel2:#f1f5f9; --border:#e2e8f0;
+  --txt:#1e293b; --mut:#64748b;
+  --red:#dc2626; --green:#16a34a; --orange:#d97706; --blue:#2563eb;
+  --own:#2563eb; --comp:#ea580c;
+}
+*{scrollbar-width:thin;scrollbar-color:#cbd5e1 transparent;}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;font-size:15px;}
+.topbar{background:var(--panel);border-bottom:1px solid var(--border);padding:.55rem .9rem;display:flex;align-items:center;gap:1rem;position:sticky;top:0;z-index:50;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+.brand{font-weight:700;font-size:1.1rem;white-space:nowrap;}
+.brand .r{color:var(--red);}
+.filters{background:var(--panel2);border-bottom:1px solid var(--border);padding:.6rem .9rem;display:flex;gap:1.2rem;flex-wrap:wrap;align-items:flex-end;position:sticky;top:44px;z-index:49;box-shadow:0 1px 3px rgba(0,0,0,.05);}
+.fgroup{display:flex;flex-direction:column;gap:.28rem;}
+.flabel{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);font-weight:600;}
+.pills{display:flex;gap:.28rem;flex-wrap:wrap;}
+.pill{padding:.22rem .6rem;border:1px solid var(--border);border-radius:20px;background:var(--panel);color:var(--mut);cursor:pointer;font-size:.82rem;user-select:none;transition:all .12s;}
+.pill:hover{border-color:#94a3b8;color:var(--txt);}
+.pill.on{background:var(--red);border-color:var(--red);color:#fff;}
+.pill.on.own{background:var(--own);border-color:var(--own);}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden;}
+.seg button{background:var(--panel);color:var(--mut);border:none;padding:.22rem .65rem;font-size:.82rem;cursor:pointer;transition:background .1s;}
+.seg button:hover{background:var(--panel2);}
+.seg button.on{background:var(--red);color:#fff;}
+input[type=date]{background:var(--panel);border:1px solid var(--border);color:var(--txt);border-radius:6px;padding:.2rem .45rem;font-size:.82rem;}
+.tabbar{display:flex;gap:.1rem;padding:0 .9rem;background:var(--panel);border-bottom:2px solid var(--border);overflow-x:auto;position:sticky;top:98px;z-index:48;}
+.tabbar a{color:var(--mut);padding:.6rem .9rem;font-size:.9rem;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;cursor:pointer;text-decoration:none;transition:color .12s;}
+.tabbar a:hover{color:var(--txt);}
+.tabbar a.on{color:var(--red);border-bottom:3px solid var(--red);font-weight:700;background:rgba(220,38,38,.07);border-radius:6px 6px 0 0;}
+.wrap{padding:.9rem;}
+.grid{display:grid;gap:.8rem;}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:.85rem 1rem;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+.card h6{font-size:.73rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 .6rem;font-weight:600;display:flex;justify-content:space-between;align-items:center;}
+.kpi{display:flex;flex-direction:column;gap:.2rem;}
+.kpi .v{font-size:2rem;font-weight:700;line-height:1;}
+.kpi .l{font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);}
+.kpi .d{font-size:.78rem;font-weight:600;}
+.up{color:var(--green);} .down{color:var(--red);} .flat{color:var(--mut);}
+canvas{max-width:100%;}.ch{position:relative;height:175px;}.ch-sm{position:relative;height:145px;}.ch-xs{position:relative;height:115px;}
+table{width:100%;font-size:.84rem;border-collapse:collapse;}
+th{color:var(--mut);font-weight:700;text-align:left;padding:.42rem .55rem;border-bottom:2px solid var(--border);position:sticky;top:0;background:var(--panel);font-size:.73rem;text-transform:uppercase;letter-spacing:.04em;}
+td{padding:.38rem .55rem;border-bottom:1px solid var(--border);}
+tr:hover td{background:var(--panel2);}
+.scroll{max-height:420px;overflow:auto;}
+.badge2{padding:.1rem .45rem;border-radius:4px;font-size:.75rem;font-weight:600;}
+.b-pos{background:#dcfce7;color:#15803d;} .b-neg{background:#fee2e2;color:#dc2626;} .b-neu{background:#f1f5f9;color:#64748b;}
+.tag{display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:5px;padding:.06rem .4rem;margin:.1rem;font-size:.8rem;}
+.spin{display:none;position:fixed;inset:0;background:rgba(255,255,255,.78);z-index:999;align-items:center;justify-content:center;}
+.spin.on{display:flex;}
+.topicchip{background:linear-gradient(135deg,#f8fafc,#f1f5f9);border:1px solid var(--border);border-radius:8px;padding:.7rem;}
+.alert-pill{background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:5px;padding:.1rem .45rem;font-size:.75rem;margin:.1rem;display:inline-block;}
+.muted{color:var(--mut);}
+.right{text-align:right;}
+.hidden{display:none;}
+</style>
+</head>
+<body>
+
+<div class="spin" id="spin"><div class="spinner-border text-danger"></div></div>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="brand"><span class="r">Label</span>Vie · Social Listening</div>
+  <div class="muted small" id="daterange-label"></div>
+  <div class="ms-auto muted small" id="updated"></div>
+</div>
+
+<!-- Global filters -->
+<div class="filters" id="filters">
+  <div class="fgroup">
+    <span class="flabel">Période</span>
+    <div style="display:flex;gap:.3rem;align-items:center;">
+      <input type="date" id="f-start"><span class="muted">→</span><input type="date" id="f-end">
+      <div class="seg" id="preset-seg" style="margin-left:.3rem;">
+        <button data-preset="all">Tout</button>
+        <button data-preset="year">Année</button>
+        <button data-preset="90">90j</button>
+        <button data-preset="30">30j</button>
+      </div>
+    </div>
+  </div>
+  <div class="fgroup">
+    <span class="flabel">Granularité</span>
+    <div class="seg" id="gran-seg">
+      <button data-gran="day">Jour</button>
+      <button data-gran="week">Semaine</button>
+      <button data-gran="month" class="on">Mois</button>
+    </div>
+  </div>
+  <div class="fgroup">
+    <span class="flabel" title="Une publication peut citer plusieurs marques ; elle est alors comptée pour chacune.">Marques&nbsp;ⓘ</span>
+    <div class="pills" id="f-entities"></div>
+  </div>
+  <div class="fgroup">
+    <span class="flabel">Plateformes</span>
+    <div class="pills" id="f-platforms"></div>
+  </div>
+  <div class="fgroup">
+    <span class="flabel">Type</span>
+    <div class="pills" id="f-types"></div>
+  </div>
+  <div class="fgroup">
+    <span class="flabel">Langue</span>
+    <div class="pills" id="f-langs"></div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tabbar" id="tabs">
+  <a data-tab="overview" class="on">Vue d'ensemble</a>
+  <a data-tab="competition">Concurrence</a>
+  <a data-tab="sentiment">Sentiment</a>
+  <a data-tab="themes">Thèmes</a>
+  <a data-tab="boycott">Boycott</a>
+  <a data-tab="engagement">Engagement</a>
+  <a data-tab="language">Langue</a>
+  <a data-tab="topics">Topics</a>
+  <a data-tab="authors">Auteurs</a>
+  <a data-tab="explorer">Explorer</a>
+</div>
+
+<div class="wrap">
+
+  <!-- OVERVIEW -->
+  <div class="tabpane" id="tab-overview">
+    <div class="grid" style="grid-template-columns:repeat(6,1fr);margin-bottom:.8rem;" id="kpi-row"></div>
+    <div class="grid" style="grid-template-columns:2fr 1fr;">
+      <div class="card"><h6>Tendance du sentiment <span class="muted" id="ov-gran"></span></h6><div class="ch"><canvas id="c-trend"></canvas></div></div>
+      <div class="card"><h6>Répartition du sentiment</h6><div class="ch-xs"><canvas id="c-sentpie"></canvas></div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:.8rem;">
+      <div class="card"><h6>Top thèmes (mentions)</h6><div class="ch-sm"><canvas id="c-toptheme"></canvas></div></div>
+      <div class="card"><h6>Volume par plateforme</h6><div class="ch-sm"><canvas id="c-ovplat"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- COMPETITION -->
+  <div class="tabpane hidden" id="tab-competition">
+    <div class="card" style="margin-bottom:.8rem;">
+      <h6>Comparer les marques <span class="muted" style="text-transform:none;letter-spacing:0;">— cochées = individuelles · décochées = regroupées dans « Autres »</span></h6>
+      <div class="pills" id="cmp-pills"></div>
+      <div id="cmp-note" class="muted" style="margin-top:.5rem;font-size:.8rem;line-height:1.5;"></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;">
+      <div class="card"><h6>Part de voix (mentions)</h6><div class="ch-sm"><canvas id="c-grpsov"></canvas></div></div>
+      <div class="card"><h6>Groupe LabelVie vs Concurrents</h6><div class="ch-sm"><canvas id="c-grprates"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-top:.8rem;"><h6>Propagation du boycott par date et enseigne <span class="muted" id="boy-gran"></span></h6><div class="ch"><canvas id="c-brandcmp"></canvas></div></div>
+    <div class="card" style="margin-top:.8rem;"><h6>Engagement par marque</h6><div class="ch-sm"><canvas id="c-brandeng"></canvas></div></div>
+    <div class="card" style="margin-top:.8rem;"><h6>Tableau comparatif</h6>
+      <div class="scroll"><table id="t-comp"><thead><tr>
+        <th>Marque</th><th>Groupe</th><th class="right">Mentions</th><th class="right">SOV %</th>
+        <th class="right">Positif %</th><th class="right">Négatif %</th><th class="right">Boycott %</th>
+        <th class="right">Score moy.</th><th class="right">Engagement</th>
+      </tr></thead><tbody></tbody></table></div>
+      <div class="muted" style="margin-top:.4rem;font-size:.78rem;">Une publication citant plusieurs marques est comptée pour chacune ; la somme peut dépasser le total unique.</div>
+    </div>
+  </div>
+
+  <!-- SENTIMENT -->
+  <div class="tabpane hidden" id="tab-sentiment">
+    <div class="grid" style="grid-template-columns:1fr 1fr;">
+      <div class="card"><h6>Sentiment par marque</h6><div class="ch"><canvas id="c-sentbrand"></canvas></div></div>
+      <div class="card"><h6>Score moyen par marque</h6><div class="ch-sm"><canvas id="c-sentscore"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-top:.8rem;"><h6>Matrice marque × thème (score moyen, vert = positif)</h6>
+      <div class="scroll" id="heatmap-wrap"></div>
+    </div>
+  </div>
+
+  <!-- THEMES -->
+  <div class="tabpane hidden" id="tab-themes">
+    <div class="grid" style="grid-template-columns:1fr 1fr;">
+      <div class="card"><h6>Fréquence des thèmes</h6><div class="ch"><canvas id="c-themefreq"></canvas></div></div>
+      <div class="card"><h6>Sentiment par thème</h6><div class="ch"><canvas id="c-themesent"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-top:.8rem;"><h6>Évolution des thèmes <span class="muted" id="th-gran"></span></h6><div class="ch"><canvas id="c-themetrend"></canvas></div></div>
+  </div>
+
+  <!-- BOYCOTT -->
+  <div class="tabpane hidden" id="tab-boycott">
+    <div class="card"><h6>Taux de boycott dans le temps <span class="muted" id="by-gran"></span></h6><div class="ch"><canvas id="c-boytrend"></canvas></div></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr 1fr;margin-top:.8rem;">
+      <div class="card"><h6>Boycott par marque</h6><div class="ch-sm"><canvas id="c-boybrand"></canvas></div></div>
+      <div class="card"><h6>Boycott par plateforme</h6><div class="ch-sm"><canvas id="c-boyplat"></canvas></div></div>
+      <div class="card"><h6>Boycott par langue</h6><div class="ch-sm"><canvas id="c-boylang"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- ENGAGEMENT -->
+  <div class="tabpane hidden" id="tab-engagement">
+    <div class="grid" style="grid-template-columns:1fr 1fr;">
+      <div class="card"><h6>Engagement par sentiment</h6><div class="ch"><canvas id="c-engsent"></canvas></div></div>
+      <div class="card"><h6>Détail par plateforme — likes / partages / commentaires</h6><div class="ch-sm"><canvas id="c-engplat"></canvas></div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:2fr 1fr;margin-top:.8rem;">
+      <div class="card"><h6>Tendance d'engagement <span class="muted" id="en-gran"></span></h6><div class="ch"><canvas id="c-engtrend"></canvas></div></div>
+      <div class="card"><h6>Post vs Commentaire</h6><div class="ch-xs"><canvas id="c-engtype"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- LANGUAGE -->
+  <div class="tabpane hidden" id="tab-language">
+    <div class="grid" style="grid-template-columns:1fr 1fr;">
+      <div class="card"><h6>Volume par langue</h6><div class="ch"><canvas id="c-langvol"></canvas></div></div>
+      <div class="card"><h6>Sentiment par langue</h6><div class="ch"><canvas id="c-langsent"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-top:.8rem;"><h6>Langue × Plateforme</h6><div class="ch"><canvas id="c-langplat"></canvas></div></div>
+  </div>
+
+  <!-- TOPICS -->
+  <div class="tabpane hidden" id="tab-topics">
+    <div class="card"><h6>Modélisation de sujets (NMF) <span class="muted" id="topic-run"></span></h6>
+      <div class="grid" id="topic-grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr));"></div>
+    </div>
+    <div class="card" style="margin-top:.8rem;"><h6>Alertes de tendance (période vs précédente)</h6>
+      <div id="trend-alerts"></div>
+    </div>
+  </div>
+
+  <!-- AUTHORS -->
+  <div class="tabpane hidden" id="tab-authors">
+    <div class="grid" style="grid-template-columns:1fr 1fr;">
+      <div class="card"><h6>Top auteurs — engagement</h6><div class="ch-sm"><canvas id="c-authbar"></canvas></div></div>
+      <div class="card"><h6>Détracteurs (% négatif élevé)</h6><div class="ch-sm"><canvas id="c-authdet"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-top:.8rem;"><h6>Détail des auteurs</h6>
+      <div class="scroll"><table id="t-auth"><thead><tr>
+        <th>Auteur</th><th>Plateforme</th><th class="right">Posts</th><th class="right">Engagement</th>
+        <th class="right">Score</th><th class="right">Négatif %</th><th class="right">Boycott</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- EXPLORER -->
+  <div class="tabpane hidden" id="tab-explorer">
+    <div class="card" style="margin-bottom:.8rem;display:flex;gap:1rem;align-items:flex-end;flex-wrap:wrap;">
+      <div class="fgroup"><span class="flabel">Thème</span><select id="ex-theme" class="form-select form-select-sm" style="width:150px;"></select></div>
+      <div class="fgroup"><span class="flabel">Sentiment</span><select id="ex-sent" class="form-select form-select-sm" style="width:140px;">
+        <option value="all">Tous</option><option>Positif</option><option>Négatif</option><option>Neutre</option></select></div>
+      <div class="fgroup"><span class="flabel">Boycott seulement</span>
+        <div class="pills"><span class="pill" id="ex-boy" data-on="0">Boycott</span></div></div>
+      <button class="btn btn-sm btn-danger" id="ex-go">Filtrer</button>
+      <span class="muted ms-auto" id="ex-count"></span>
+    </div>
+    <div class="card"><div class="scroll" style="max-height:600px;"><table id="t-comments"><thead><tr>
+      <th>Date</th><th>Plateforme</th><th>Marque</th><th>Thème</th><th>Sent.</th><th>Boy.</th><th>Langue</th><th>Texte</th>
+    </tr></thead><tbody></tbody></table></div></div>
+  </div>
+
+</div>
+
+<script>
+Chart.register(ChartDataLabels);
+Chart.defaults.set('plugins.datalabels', { display:false });
+Chart.defaults.color = '#64748b';
+Chart.defaults.font.size = 12;
+
+const GRID_COLOR = '#e2e8f0';
+const C = {
+  pos:'#22c55e', neg:'#ef4444', neu:'#94a3b8', boy:'#dc2626',
+  own:'#3b82f6', comp:'#f97316',
+  pal:['#dc2626','#3b82f6','#22c55e','#f97316','#a855f7','#14b8a6','#f59e0b','#ec4899','#64748b','#10b981','#6366f1','#ef4444','#eab308','#8b5cf6'],
+};
+const charts = {};
+const state = {
+  meta:null, gran:'month',
+  start:null, end:null,
+  entities:new Set(), platforms:new Set(), types:new Set(), langs:new Set(),
+  compare:new Set(), compareReady:false,
+  tab:'overview',
+};
+
+function spin(on){ document.getElementById('spin').classList.toggle('on', on); }
+
+function qstr(extra={}){
+  const p = new URLSearchParams();
+  if(state.start) p.set('start', state.start);
+  if(state.end)   p.set('end', state.end);
+  if(state.entities.size)  p.set('entities',  [...state.entities].join(','));
+  if(state.platforms.size) p.set('platforms', [...state.platforms].join(','));
+  if(state.types.size)     p.set('record_types', [...state.types].join(','));
+  if(state.langs.size)     p.set('langs', [...state.langs].join(','));
+  p.set('gran', state.gran);
+  for(const k in extra) p.set(k, extra[k]);
+  return p.toString();
+}
+
+async function api(path, extra={}){
+  spin(true);
+  try{
+    const r = await fetch(path + '?' + qstr(extra));
+    if(!r.ok) throw new Error(r.status);
+    return await r.json();
+  } finally { spin(false); }
+}
+
+function chart(id, cfg){
+  if(charts[id]) charts[id].destroy();
+  const el = document.getElementById(id);
+  if(!el) return;
+  cfg.options = cfg.options || {};
+  cfg.options.responsive = true;
+  cfg.options.maintainAspectRatio = false;
+  if(!cfg.options.plugins) cfg.options.plugins = {};
+  if(!cfg.options.plugins.legend) cfg.options.plugins.legend = {labels:{boxWidth:12,font:{size:11}}};
+  const grid = {color:GRID_COLOR}, ticks = {font:{size:12}};
+  if(cfg.type !== 'doughnut' && cfg.type !== 'pie'){
+    if(!cfg.options.scales){
+      cfg.options.scales = {x:{grid,ticks}, y:{min:0,grid,ticks}};
+    } else {
+      const sc = cfg.options.scales;
+      if(!sc.x) sc.x = {grid,ticks};
+      else { sc.x.grid = sc.x.grid||grid; sc.x.ticks = sc.x.ticks||ticks; }
+      Object.keys(sc).forEach(k => {
+        if(k === 'x') return;
+        if(sc[k].min === undefined) sc[k].min = 0;
+        sc[k].ticks = sc[k].ticks || ticks;
+        if(!sc[k].grid) sc[k].grid = grid;
+      });
+    }
+  }
+  // Valeurs lisibles directement sur chaque barre (sans survol)
+  if(cfg.type === 'bar'){
+    cfg.options.plugins.datalabels = Object.assign({
+      display:true, anchor:'center', align:'center', clamp:true,
+      color:'#1e293b', font:{size:10, weight:'600'},
+      formatter:v => (v===null||v===undefined||v===0) ? '' : Number(v).toLocaleString('fr-FR')
+    }, cfg.options.plugins.datalabels || {});
+  }
+  charts[id] = new Chart(el.getContext('2d'), cfg);
+}
+
+const fmt = n => Number(n||0).toLocaleString('fr-FR');
+const shortDate = s => s ? s.slice(0,10) : '';
+
+function pill(container, label, value, set, ownFlag){
+  const el = document.createElement('span');
+  el.className = 'pill' + (ownFlag?' own-eligible':'');
+  el.textContent = label;
+  el.dataset.value = value;
+  el.onclick = () => {
+    if(set.has(value)) set.delete(value); else set.add(value);
+    el.classList.toggle('on', set.has(value));
+    if(ownFlag) el.classList.toggle('own', set.has(value));
+    reloadTab();
+  };
+  container.appendChild(el);
+}
+
+function buildFilters(m){
+  const ent = document.getElementById('f-entities'); ent.innerHTML='';
+  m.brands.forEach(b => pill(ent, b.display_name + (b.is_own?' ★':''), b.entity, state.entities, b.is_own));
+  const pl = document.getElementById('f-platforms'); pl.innerHTML='';
+  m.platforms.forEach(p => pill(pl, p, p, state.platforms, false));
+  const ty = document.getElementById('f-types'); ty.innerHTML='';
+  m.record_types.forEach(t => pill(ty, t==='post'?'Post':'Commentaire', t, state.types, false));
+  const lg = document.getElementById('f-langs'); lg.innerHTML='';
+  m.languages.forEach(l => pill(lg, l, l, state.langs, false));
+  const th = document.getElementById('ex-theme');
+  th.innerHTML = '<option value="all">Tous</option>' + m.themes.map(t=>`<option>${t}</option>`).join('');
+}
+
+function setPreset(preset){
+  const max = state.meta.date_max, min = state.meta.date_min;
+  if(!max){ return; }
+  state.end = max;
+  if(preset==='all'){ state.start = min; }
+  else if(preset==='year'){ state.start = max.slice(0,4)+'-01-01'; }
+  else { const d=new Date(max+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()-parseInt(preset)); state.start = d.toISOString().slice(0,10); }
+  document.getElementById('f-start').value = state.start;
+  document.getElementById('f-end').value = state.end;
+  document.getElementById('daterange-label').textContent = `${state.start} → ${state.end}`;
+}
+
+const LOADERS = {
+  overview:loadOverview, competition:loadCompetition, sentiment:loadSentiment,
+  themes:loadThemes, boycott:loadBoycott, engagement:loadEngagement,
+  language:loadLanguage, topics:loadTopics, authors:loadAuthors, explorer:loadExplorer,
+};
+function showTab(tab){
+  state.tab = tab;
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
+  document.getElementById('tab-'+tab).classList.remove('hidden');
+  document.querySelectorAll('#tabs a').forEach(a=>a.classList.toggle('on', a.dataset.tab===tab));
+  LOADERS[tab]();
+}
+function reloadTab(){
+  document.getElementById('updated').textContent = 'Mis à jour ' + new Date().toLocaleTimeString('fr-FR');
+  document.getElementById('daterange-label').textContent = `${state.start||'…'} → ${state.end||'…'}`;
+  LOADERS[state.tab]();
+}
+
+// ── 1. OVERVIEW ───────────────────────────────────────────────────────────────
+async function loadOverview(){
+  document.getElementById('ov-gran').textContent = '· '+state.gran;
+  const k = await api('/api/kpis');
+  const c = k.current, d = k.delta;
+  const cards = [
+    {l:'Publications', v:fmt(c.records), d:d.records, suf:''},
+    {l:'Taux positif', v:c.pos_rate+'%', d:d.pos_rate, suf:'pt', good:'up'},
+    {l:'Taux négatif', v:c.neg_rate+'%', d:d.neg_rate, suf:'pt', good:'down'},
+    {l:'Taux boycott', v:c.boycott_rate+'%', d:d.boycott_rate, suf:'pt', good:'down'},
+    {l:'Score moyen', v:c.avg_score, d:d.avg_score, suf:'', good:'up'},
+    {l:'Engagement', v:fmt(c.engagement), d:null, suf:''},
+  ];
+  document.getElementById('kpi-row').innerHTML = cards.map(x=>{
+    let dd = '';
+    if(x.d!==null && x.d!==undefined){
+      const arrow = x.d>0?'▲':x.d<0?'▼':'■';
+      let cls='flat';
+      if(x.d!==0 && x.good){ const pos=x.d>0; cls = ((x.good==='up')===pos)?'up':'down'; }
+      dd = `<span class="d ${cls}">${arrow} ${Math.abs(x.d)}${x.suf}</span>`;
+    }
+    return `<div class="card kpi"><span class="l">${x.l}</span><span class="v">${x.v}</span>${dd}</div>`;
+  }).join('');
+
+  const ts = await api('/api/timeseries');
+  const labels = ts.map(r=>shortDate(r.bucket));
+  chart('c-trend', {type:'line', data:{labels, datasets:[
+    {label:'Positif', data:ts.map(r=>r.pos), borderColor:C.pos, backgroundColor:'rgba(34,197,94,.1)', fill:true, tension:.3, pointRadius:2},
+    {label:'Négatif', data:ts.map(r=>r.neg), borderColor:C.neg, backgroundColor:'rgba(239,68,68,.1)', fill:true, tension:.3, pointRadius:2},
+    {label:'Neutre',  data:ts.map(r=>r.neu), borderColor:C.neu, fill:false, tension:.3, pointRadius:2},
+  ]}});
+
+  chart('c-sentpie', {type:'doughnut', data:{labels:['Positif','Négatif','Neutre'],
+    datasets:[{data:[c.pos_rate,c.neg_rate,c.neu_rate], backgroundColor:[C.pos,C.neg,C.neu], borderColor:'#ffffff', borderWidth:3}]},
+    options:{cutout:'62%', plugins:{datalabels:{display:true,color:'#1e293b',backgroundColor:'rgba(255,255,255,.85)',borderRadius:4,padding:{top:2,bottom:2,left:5,right:5},font:{size:11,weight:'bold'},formatter:v=>v.toFixed(1)+'%'}}}});
+
+  const th = await api('/api/themes');
+  const tf = th.frequency.slice(0,8);
+  chart('c-toptheme', {type:'bar', data:{labels:tf.map(r=>r.theme),
+    datasets:[{label:'Mentions', data:tf.map(r=>r.mentions), backgroundColor:C.own}]},
+    options:{indexAxis:'y', plugins:{legend:{display:false}}}});
+
+  const by = await api('/api/boycott');
+  chart('c-ovplat', {type:'bar', data:{labels:by.by_platform.map(r=>r.platform),
+    datasets:[{label:'Mentions', data:by.by_platform.map(r=>r.total), backgroundColor:C.pal}]},
+    options:{plugins:{legend:{display:false}}}});
+}
+
+// ── 2. COMPETITION ────────────────────────────────────────────────────────────
+const TRACKED_COMPETITORS = ['Marjane','Kazyon','BIM','Atacadao','HyperU','Asswak Essalam','Suppeco'];
+
+function buildCmpPills(brands){
+  const box = document.getElementById('cmp-pills'); box.innerHTML='';
+  brands.forEach(b=>{
+    const el = document.createElement('span');
+    el.className = 'pill' + (state.compare.has(b.entity) ? (b.is_own?' on own':' on') : '');
+    el.textContent = b.display_name + (b.is_own?' ★':'');
+    el.onclick = ()=>{
+      if(state.compare.has(b.entity)) state.compare.delete(b.entity);
+      else state.compare.add(b.entity);
+      loadCompetition();
+    };
+    box.appendChild(el);
+  });
+}
+
+function bucketBrands(brands){
+  const num = v => Number(v||0);
+  const indiv  = brands.filter(b=> state.compare.has(b.entity));
+  const others = brands.filter(b=> !state.compare.has(b.entity));
+  const rows = indiv.map(b=>({
+    label:b.display_name, is_own:b.is_own, is_other:false,
+    records:num(b.records), pos:num(b.pos), neg:num(b.neg), boy:num(b.boy),
+    engagement:num(b.engagement), avg_score:num(b.avg_score),
+    pos_rate:num(b.pos_rate), neg_rate:num(b.neg_rate), boycott_rate:num(b.boycott_rate),
+    brand_group:b.brand_group,
+  }));
+  if(others.length){
+    const a = others.reduce((s,b)=>({records:s.records+num(b.records), pos:s.pos+num(b.pos),
+      neg:s.neg+num(b.neg), boy:s.boy+num(b.boy), engagement:s.engagement+num(b.engagement)}),
+      {records:0,pos:0,neg:0,boy:0,engagement:0});
+    const den = a.records || 1;
+    rows.push({label:`Autres (${others.length})`, is_own:0, is_other:true,
+      records:a.records, pos:a.pos, neg:a.neg, boy:a.boy, engagement:a.engagement, avg_score:null,
+      pos_rate:+(a.pos/den*100).toFixed(1), neg_rate:+(a.neg/den*100).toFixed(1),
+      boycott_rate:+(a.boy/den*100).toFixed(1), brand_group:'Autres'});
+  }
+  return rows;
+}
+
+async function loadCompetition(){
+  const d = await api('/api/competition');
+  const brands = d.brands;
+  if(!state.compareReady){ brands.forEach(b=>state.compare.add(b.entity)); state.compareReady = true; }
+  buildCmpPills(brands);
+
+  const present = new Set(brands.map(b=>b.entity));
+  const missing = TRACKED_COMPETITORS.filter(c=>!present.has(c));
+  document.getElementById('cmp-note').innerHTML =
+    `<b>${brands.length}</b> marque(s) détectée(s) : ${[...present].join(', ')}. ` +
+    (missing.length ? `Absents des données : <b>${missing.join(', ')}</b>.` : '');
+
+  const rows = bucketBrands(brands);
+  const colorOf = r => r.is_other ? C.neu : (r.is_own ? C.own : C.comp);
+  const totalRec = rows.reduce((s,r)=>s+r.records,0) || 1;
+
+  chart('c-grpsov', {type:'doughnut', data:{labels:rows.map(r=>r.label),
+    datasets:[{data:rows.map(r=>r.records), backgroundColor:rows.map(colorOf), borderColor:'#ffffff', borderWidth:3}]},
+    options:{cutout:'58%', plugins:{datalabels:{display:true,color:'#1e293b',backgroundColor:'rgba(255,255,255,.85)',borderRadius:4,padding:{top:2,bottom:2,left:5,right:5},font:{size:11,weight:'bold'},
+      formatter:(v)=>Math.round(v/totalRec*100)+'%'}}}});
+
+  const g = d.groups;
+  chart('c-grprates', {type:'bar', data:{labels:g.map(r=>r.side),
+    datasets:[
+      {label:'Positif %', data:g.map(r=>r.pos_rate), backgroundColor:C.pos},
+      {label:'Négatif %', data:g.map(r=>r.neg_rate), backgroundColor:C.neg},
+      {label:'Boycott %', data:g.map(r=>r.boycott_rate), backgroundColor:C.boy},
+    ]}});
+
+  // Propagation du boycott dans le temps, une ligne par enseigne
+  const bt = d.boycott_trend || {buckets:[], series:[]};
+  document.getElementById('boy-gran').textContent = '· '+state.gran;
+  const boyPal = ['#ef4444','#3b82f6','#22c55e','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#64748b'];
+  const boyDatasets = bt.series.map((s,i)=>({
+    label: s.entity+' ('+s.total+')',
+    data: s.data,
+    borderColor: boyPal[i%boyPal.length],
+    backgroundColor: boyPal[i%boyPal.length],
+    fill:false, tension:.3, pointRadius:3, spanGaps:true
+  }));
+  chart('c-brandcmp', {
+    type:'line',
+    data:{ labels: bt.buckets.map(shortDate), datasets: boyDatasets },
+    options:{
+      plugins:{ legend:{display: boyDatasets.length>0},
+        title:{ display: boyDatasets.length===0, text:'Aucun signal de boycott sur la période' } },
+      scales:{ y:{ beginAtZero:true, ticks:{precision:0}, title:{display:true,text:'Signaux de boycott'} } }
+    }
+  });
+
+  chart('c-brandeng', {type:'bar', data:{labels:rows.map(r=>r.label),
+    datasets:[{label:'Engagement', data:rows.map(r=>r.engagement), backgroundColor:rows.map(colorOf)}]},
+    options:{indexAxis:'y', plugins:{legend:{display:false},
+      datalabels:{display:true,anchor:'end',align:'end',color:'#334155',font:{size:11},formatter:v=>fmt(v)}}}});
+
+  document.querySelector('#t-comp tbody').innerHTML = brands.map(r=>`
+    <tr><td><b>${r.display_name}</b></td><td><span class="badge2 ${r.is_own?'b-pos':'b-neu'}">${r.brand_group}</span></td>
+    <td class="right">${fmt(r.records)}</td><td class="right">${r.sov_pct}%</td>
+    <td class="right" style="color:${C.pos}">${r.pos_rate}%</td>
+    <td class="right" style="color:${C.neg}">${r.neg_rate}%</td>
+    <td class="right" style="color:${C.boy}">${r.boycott_rate}%</td>
+    <td class="right">${r.avg_score}</td><td class="right">${fmt(r.engagement)}</td></tr>`).join('');
+}
+
+// ── 3. SENTIMENT ──────────────────────────────────────────────────────────────
+async function loadSentiment(){
+  const d = await api('/api/sentiment');
+  const be = d.by_entity;
+  chart('c-sentbrand', {type:'bar', data:{labels:be.map(r=>r.entity),
+    datasets:[
+      {label:'Positif', data:be.map(r=>r.positive), backgroundColor:C.pos},
+      {label:'Négatif', data:be.map(r=>r.negative), backgroundColor:C.neg},
+      {label:'Neutre',  data:be.map(r=>r.neutral),  backgroundColor:C.neu},
+    ]}, options:{scales:{x:{stacked:true},y:{stacked:true}}}});
+  chart('c-sentscore', {type:'bar', data:{labels:be.map(r=>r.entity),
+    datasets:[{label:'Score moyen', data:be.map(r=>r.avg_score), backgroundColor:be.map(r=>r.avg_score>=0?C.pos:C.neg)}]},
+    options:{indexAxis:'y', plugins:{legend:{display:false}}}});
+
+  const hm = d.heatmap;
+  const entities = [...new Set(hm.map(r=>r.entity))];
+  const themes = [...new Set(hm.map(r=>r.theme))];
+  const lookup = {}; hm.forEach(r=> lookup[r.entity+'|'+r.theme]=r);
+  let html = '<table><thead><tr><th>Marque \\ Thème</th>' + themes.map(t=>`<th class="right">${t}</th>`).join('') + '</tr></thead><tbody>';
+  entities.forEach(e=>{
+    html += `<tr><td><b>${e}</b></td>`;
+    themes.forEach(t=>{
+      const c = lookup[e+'|'+t];
+      if(!c){ html += '<td class="right muted">·</td>'; return; }
+      const s = c.avg_score;
+      const col = s>=0
+        ? `rgba(22,163,74,${0.15+Math.min(Math.abs(s),1)*0.55})`
+        : `rgba(220,38,38,${0.15+Math.min(Math.abs(s),1)*0.55})`;
+      const txtcol = Math.abs(s) > 0.45 ? '#fff' : '#1e293b';
+      html += `<td class="right" style="background:${col};color:${txtcol}">${s}<div style="font-size:.68rem;opacity:.78;line-height:1;margin-top:1px">n=${c.total}</div></td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('heatmap-wrap').innerHTML = html;
+}
+
+// ── 4. THEMES ─────────────────────────────────────────────────────────────────
+async function loadThemes(){
+  document.getElementById('th-gran').textContent='· '+state.gran;
+  const d = await api('/api/themes');
+  const f = d.frequency;
+  chart('c-themefreq', {type:'bar', data:{labels:f.map(r=>r.theme),
+    datasets:[{label:'Mentions', data:f.map(r=>r.mentions), backgroundColor:C.own}]},
+    options:{indexAxis:'y', plugins:{legend:{display:false}}}});
+  chart('c-themesent', {type:'bar', data:{labels:f.map(r=>r.theme),
+    datasets:[
+      {label:'Positif', data:f.map(r=>r.positive), backgroundColor:C.pos},
+      {label:'Négatif', data:f.map(r=>r.negative), backgroundColor:C.neg},
+      {label:'Neutre',  data:f.map(r=>r.neutral),  backgroundColor:C.neu},
+    ]}, options:{indexAxis:'y', scales:{x:{stacked:true},y:{stacked:true}}}});
+
+  const tr = d.trend;
+  const buckets = [...new Set(tr.map(r=>shortDate(r.bucket)))].sort();
+  const tthemes = [...new Set(tr.map(r=>r.theme))];
+  const map = {}; tr.forEach(r=> map[shortDate(r.bucket)+'|'+r.theme]=r.mentions);
+  chart('c-themetrend', {type:'line', data:{labels:buckets,
+    datasets:tthemes.map((t,i)=>({label:t, data:buckets.map(b=>map[b+'|'+t]||0), borderColor:C.pal[i%C.pal.length], tension:.3, pointRadius:1.5}))}});
+}
+
+// ── 5. BOYCOTT ────────────────────────────────────────────────────────────────
+async function loadBoycott(){
+  document.getElementById('by-gran').textContent='· '+state.gran;
+  const d = await api('/api/boycott');
+  const t = d.trend;
+  chart('c-boytrend', {type:'line', data:{labels:t.map(r=>shortDate(r.bucket)),
+    datasets:[
+      {label:'Taux boycott %', data:t.map(r=>r.rate), borderColor:C.boy, backgroundColor:'rgba(220,38,38,.1)', fill:true, tension:.3, pointRadius:3, yAxisID:'y'},
+      {label:'Total mentions', data:t.map(r=>r.total), borderColor:'rgba(100,116,139,.6)', backgroundColor:'transparent', borderDash:[4,3], tension:.3, pointRadius:2, yAxisID:'y1'},
+    ]},
+    options:{scales:{
+      y: {position:'left',  min:0, title:{display:true, text:'Taux boycott %', color:'#64748b'}},
+      y1:{position:'right', min:0, grid:{display:false}, ticks:{color:'rgba(0,0,0,.45)'}, title:{display:true, text:'Nb mentions', color:'#64748b'}},
+    }, plugins:{tooltip:{callbacks:{label:ctx=>{
+      const r=t[ctx.dataIndex];
+      return ctx.datasetIndex===0
+        ? `Taux : ${r.rate}% (${r.boycott} boycott / ${r.total} total)`
+        : `Total : ${r.total} mentions`;
+    }}}}}});
+  chart('c-boybrand', {type:'bar', data:{labels:d.by_entity.map(r=>r.entity),
+    datasets:[{label:'Records boycott', data:d.by_entity.map(r=>r.boycott), backgroundColor:C.boy}]},
+    options:{plugins:{legend:{display:false}}}});
+  chart('c-boyplat', {type:'doughnut', data:{labels:d.by_platform.map(r=>r.platform),
+    datasets:[{data:d.by_platform.map(r=>r.boycott), backgroundColor:C.pal, borderColor:'#ffffff', borderWidth:3}]},
+    options:{cutout:'55%'}});
+  chart('c-boylang', {type:'bar', data:{labels:d.by_language.map(r=>r.language),
+    datasets:[{label:'Records boycott', data:d.by_language.map(r=>r.boycott), backgroundColor:C.comp}]},
+    options:{indexAxis:'y', plugins:{legend:{display:false}}}});
+}
+
+// ── 6. ENGAGEMENT ─────────────────────────────────────────────────────────────
+async function loadEngagement(){
+  document.getElementById('en-gran').textContent='· '+state.gran;
+  const d = await api('/api/engagement');
+  const bs = d.by_sentiment;
+  const sc = s => s==='Positif'?C.pos:s==='Négatif'?C.neg:C.neu;
+  chart('c-engsent', {type:'bar', data:{labels:bs.map(r=>r.sentiment),
+    datasets:[
+      {label:'Engagement total', data:bs.map(r=>r.total_eng), backgroundColor:bs.map(r=>sc(r.sentiment)), yAxisID:'y'},
+      {label:'Engagement moyen', data:bs.map(r=>r.avg_eng), type:'line', borderColor:'#1e293b', yAxisID:'y1', pointRadius:4},
+    ]}, options:{scales:{y:{position:'left'},y1:{position:'right',grid:{display:false}}}}});
+  chart('c-engplat', {type:'bar', data:{labels:d.by_platform.map(r=>r.platform),
+    datasets:[
+      {label:'Likes', data:d.by_platform.map(r=>Number(r.likes||0)), backgroundColor:C.pos},
+      {label:'Partages', data:d.by_platform.map(r=>Number(r.shares||0)), backgroundColor:C.own},
+      {label:'Commentaires', data:d.by_platform.map(r=>Number(r.comments||0)), backgroundColor:C.neu},
+    ]},
+    options:{plugins:{legend:{display:true}}}});
+  chart('c-engtrend', {type:'line', data:{labels:d.trend.map(r=>shortDate(r.bucket)),
+    datasets:[{label:'Engagement', data:d.trend.map(r=>r.engagement), borderColor:C.own, backgroundColor:'rgba(59,130,246,.1)', fill:true, tension:.3, pointRadius:2}]}});
+  chart('c-engtype', {type:'doughnut', data:{labels:d.by_type.map(r=>r.record_type==='post'?'Post':'Commentaire'),
+    datasets:[{data:d.by_type.map(r=>r.total_eng), backgroundColor:[C.own,C.comp], borderColor:'#ffffff', borderWidth:3}]},
+    options:{cutout:'58%'}});
+}
+
+// ── 7. LANGUAGE ───────────────────────────────────────────────────────────────
+async function loadLanguage(){
+  const d = await api('/api/language');
+  const dist = d.distribution;
+  chart('c-langvol', {type:'bar', data:{labels:dist.map(r=>r.language),
+    datasets:[{label:'Records', data:dist.map(r=>r.records), backgroundColor:C.pal}]},
+    options:{plugins:{legend:{display:false}}}});
+  chart('c-langsent', {type:'bar', data:{labels:dist.map(r=>r.language),
+    datasets:[
+      {label:'Positif', data:dist.map(r=>r.positives), backgroundColor:C.pos},
+      {label:'Négatif', data:dist.map(r=>r.negatives), backgroundColor:C.neg},
+      {label:'Neutre',  data:dist.map(r=>r.neutrals),  backgroundColor:C.neu},
+    ]}, options:{scales:{x:{stacked:true},y:{stacked:true}}}});
+  const lp = d.by_platform;
+  const plats = [...new Set(lp.map(r=>r.platform))];
+  const langs = [...new Set(lp.map(r=>r.language))];
+  const lmap={}; lp.forEach(r=> lmap[r.platform+'|'+r.language]=r.records);
+  chart('c-langplat', {type:'bar', data:{labels:plats,
+    datasets:langs.map((l,i)=>({label:l, data:plats.map(p=>lmap[p+'|'+l]||0), backgroundColor:C.pal[i%C.pal.length]}))},
+    options:{scales:{x:{stacked:true},y:{stacked:true}}}});
+}
+
+// ── 8. TOPICS ─────────────────────────────────────────────────────────────────
+async function loadTopics(){
+  const d = await fetch('/api/topics').then(r=>r.json());
+  document.getElementById('topic-run').textContent = d.run_id ? '· run '+d.run_id : '· aucun run';
+  document.getElementById('topic-grid').innerHTML = (d.topics||[]).map(t=>`
+    <div class="topicchip">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.45rem;">
+        <b>Topic ${t.topic_id}</b><span class="badge2 b-neu">${t.record_count} records</span></div>
+      <div>${(t.words||[]).slice(0,10).map(w=>`<span class="tag">${w}</span>`).join('')}</div>
+    </div>`).join('') || '<div class="muted">Aucun topic. Lancez le topic modeling.</div>';
+
+  const tr = await fetch('/api/trends').then(r=>r.json());
+  const rows = tr.trends||[];
+  document.getElementById('trend-alerts').innerHTML = rows.length ? rows.map(r=>{
+    const alerts = (r.alerts||[]).map(a=>`<span class="alert-pill">${typeof a==='string'?a:JSON.stringify(a)}</span>`).join('') || '<span class="muted">aucune alerte</span>';
+    return `<div style="padding:.45rem 0;border-bottom:1px solid var(--border);">
+      <b>${r.entity}</b> — mentions ${r.prev_count}→${r.curr_count}, score ${r.prev_avg_score}→${r.curr_avg_score},
+      boycott ${(r.prev_boycott_rate*100).toFixed(0)}%→${(r.curr_boycott_rate*100).toFixed(0)}% ${alerts}</div>`;
+  }).join('') : '<div class="muted">Aucune donnée de tendance.</div>';
+}
+
+// ── 9. AUTHORS ────────────────────────────────────────────────────────────────
+async function loadAuthors(){
+  const plats = state.platforms.size ? [...state.platforms].join(',') : '';
+  const d = await fetch('/api/authors?limit=25'+(plats?'&platforms='+plats:'')).then(r=>r.json());
+  const top = d.slice(0,10);
+  chart('c-authbar', {type:'bar', data:{labels:top.map(r=>(r.author||'').slice(0,16)),
+    datasets:[{label:'Engagement', data:top.map(r=>r.total_engagement), backgroundColor:C.own}]},
+    options:{indexAxis:'y', plugins:{legend:{display:false}}}});
+  const det = [...d].filter(r=>r.records>=2).sort((a,b)=>b.negative_pct-a.negative_pct).slice(0,10);
+  chart('c-authdet', {type:'bar', data:{labels:det.map(r=>(r.author||'').slice(0,16)),
+    datasets:[{label:'% Négatif', data:det.map(r=>r.negative_pct), backgroundColor:C.neg}]},
+    options:{indexAxis:'y', plugins:{legend:{display:false}}}});
+  document.querySelector('#t-auth tbody').innerHTML = d.map(r=>`
+    <tr><td><b>${r.author||''}</b></td><td>${r.platform}</td><td class="right">${r.records}</td>
+    <td class="right">${fmt(r.total_engagement)}</td><td class="right">${r.avg_sentiment_score}</td>
+    <td class="right"><span class="badge2 ${r.negative_pct>50?'b-neg':r.negative_pct>25?'b-neu':'b-pos'}">${r.negative_pct}%</span></td>
+    <td class="right">${r.boycott_records}</td></tr>`).join('');
+}
+
+// ── 10. EXPLORER ──────────────────────────────────────────────────────────────
+async function loadExplorer(){
+  const theme = document.getElementById('ex-theme').value;
+  const sent = document.getElementById('ex-sent').value;
+  const boy = document.getElementById('ex-boy').dataset.on;
+  const rows = await api('/api/comments', {theme, sentiment:sent, boycott:boy, limit:200});
+  document.getElementById('ex-count').textContent = rows.length + ' résultats';
+  const sc = s => s==='Positif'?'b-pos':s==='Négatif'?'b-neg':'b-neu';
+  document.querySelector('#t-comments tbody').innerHTML = rows.map(r=>`
+    <tr><td>${shortDate(r.record_date)}</td><td>${r.platform}</td><td>${r.entity}</td><td>${r.theme}</td>
+    <td><span class="badge2 ${sc(r.overall_sentiment)}">${r.overall_sentiment||''}</span></td>
+    <td>${r.boycott_signal?'🚫':''}</td><td>${r.language||''}</td>
+    <td style="max-width:480px;white-space:normal;">${(r.text||'').replace(/</g,'&lt;').slice(0,300)}
+      ${r.url?`<a href="${r.url}" target="_blank" class="muted">↗</a>`:''}</td></tr>`).join('');
+}
+
+// ── Wire up ───────────────────────────────────────────────────────────────────
+document.getElementById('tabs').addEventListener('click', e=>{
+  const a = e.target.closest('a'); if(a) showTab(a.dataset.tab);
+});
+document.querySelectorAll('#gran-seg button').forEach(b=>b.onclick=()=>{
+  state.gran = b.dataset.gran;
+  document.querySelectorAll('#gran-seg button').forEach(x=>x.classList.toggle('on', x===b));
+  reloadTab();
+});
+document.querySelectorAll('#preset-seg button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#preset-seg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); setPreset(b.dataset.preset); reloadTab();
+});
+document.getElementById('f-start').onchange = e=>{ state.start=e.target.value; reloadTab(); };
+document.getElementById('f-end').onchange = e=>{ state.end=e.target.value; reloadTab(); };
+document.getElementById('ex-go').onclick = loadExplorer;
+document.getElementById('ex-boy').onclick = function(){
+  this.dataset.on = this.dataset.on==='1'?'0':'1';
+  this.classList.toggle('on', this.dataset.on==='1');
+};
+
+(async function init(){
+  try{
+    const m = await fetch('/api/meta').then(r=>r.json());
+    state.meta = m;
+    buildFilters(m);
+    setPreset('all');
+    document.querySelector('#preset-seg button[data-preset="all"]').classList.add('on');
+    showTab('overview');
+  }catch(e){
+    document.body.insertAdjacentHTML('afterbegin',
+      '<div style="padding:1rem;color:#dc2626;background:#fee2e2;border-bottom:1px solid #fca5a5;">Impossible de joindre ClickHouse ou l\'API. Vérifiez que le conteneur ClickHouse tourne et relancez le serveur.</div>');
+  }
+})();
+</script>
+</body>
+</html>

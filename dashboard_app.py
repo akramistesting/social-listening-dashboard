@@ -201,32 +201,12 @@ def tab_overview(start, end, entities, platforms, types, langs, gran):
     engv  = int(eng["total"].iloc[0])   if not eng.empty and eng["total"].iloc[0] else 0
     den   = recs or 1
 
-    # deltas
-    ps, pe = _prev_window(start, end)
-    if ps and pe:
-        pw = _where(ps, pe, [], platforms, types, langs)
-        pk = q(f"SELECT {REC} r, {POS} pos, {NEG} neg, {BOY} boy, round(avg(overall_score),3) sc FROM {DT} WHERE {pw}")
-        pr = int(pk["r"].iloc[0])   if not pk.empty else 1
-        d_recs = recs - pr
-        d_pos  = round(pos_n/den*100 - float(pk["pos"].iloc[0])/(pr or 1)*100, 1) if not pk.empty else None
-        d_neg  = round(neg_n/den*100 - float(pk["neg"].iloc[0])/(pr or 1)*100, 1) if not pk.empty else None
-        d_boy  = round(boy_n/den*100 - float(pk["boy"].iloc[0])/(pr or 1)*100, 1) if not pk.empty else None
-        d_sc   = round(score - float(pk["sc"].iloc[0]), 3)                         if not pk.empty else None
-    else:
-        d_recs = d_pos = d_neg = d_boy = d_sc = None
-
-    def _delta(v, good_dir="up"):
-        if v is None: return ""
-        arrow = "▲" if v > 0 else "▼" if v < 0 else "■"
-        color = "green" if (v > 0) == (good_dir == "up") else "red"
-        return f":{color}[{arrow} {abs(v)}]"
-
     c1,c2,c3,c4,c5,c6 = st.columns(6)
-    c1.metric("Publications",    fmt(recs),    delta=d_recs)
-    c2.metric("Taux positif",    f"{round(pos_n/den*100,1)}%", delta=f"{d_pos} pt" if d_pos else None, delta_color="normal")
-    c3.metric("Taux négatif",    f"{round(neg_n/den*100,1)}%", delta=f"{d_neg} pt" if d_neg else None, delta_color="inverse")
-    c4.metric("Taux boycott",    f"{round(boy_n/den*100,1)}%", delta=f"{d_boy} pt" if d_boy else None, delta_color="inverse")
-    c5.metric("Score moyen",     f"{score:+.3f}",              delta=d_sc, delta_color="normal")
+    c1.metric("Publications",    fmt(recs))
+    c2.metric("Taux positif",    f"{round(pos_n/den*100,1)}%")
+    c3.metric("Taux négatif",    f"{round(neg_n/den*100,1)}%")
+    c4.metric("Taux boycott",    f"{round(boy_n/den*100,1)}%")
+    c5.metric("Score moyen",     f"{score:+.3f}")
     c6.metric("Engagement",      fmt(engv))
 
     st.markdown("---")
