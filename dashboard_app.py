@@ -135,15 +135,16 @@ def _bucket(gran: str) -> str:
     if gran == "week":   return "toStartOfWeek(record_date, 1)"
     return "record_date"
 
-def _where(start, end, entities, platforms, types, langs, extra="") -> str:
+def _where(start, end, entities, platforms, types, langs, extra="", source_brands=None) -> str:
     parts = ["record_date IS NOT NULL"]
     if start: parts.append(f"record_date >= '{start}'")
     if end:   parts.append(f"record_date <= '{end}'")
     for clause in [
-        _in("entity",      entities),
-        _in("platform",    platforms),
-        _in("record_type", types),
-        _in("language",    langs),
+        _in("entity",       entities),
+        _in("source_brand", source_brands or []),
+        _in("platform",     platforms),
+        _in("record_type",  types),
+        _in("language",     langs),
     ]:
         if clause: parts.append(clause)
     if extra: parts.append(extra)
@@ -171,6 +172,7 @@ def load_meta():
     types  = q(f"SELECT DISTINCT record_type FROM {DT} ORDER BY record_type")
     langs  = q(f"SELECT DISTINCT language FROM {DT} WHERE language IS NOT NULL ORDER BY language")
     themes = q(f"SELECT DISTINCT theme FROM {DT} WHERE theme != '' ORDER BY theme")
+    srcb   = q(f"SELECT DISTINCT source_brand FROM {DT} WHERE source_brand != '' ORDER BY source_brand")
     return {
         "date_min": str(rng["mn"].iloc[0]) if not rng.empty else None,
         "date_max": str(rng["mx"].iloc[0]) if not rng.empty else None,
@@ -179,13 +181,15 @@ def load_meta():
         "types":    types["record_type"].tolist(),
         "langs":    langs["language"].tolist(),
         "themes":   themes["theme"].tolist(),
+        # Pages sources ("terrain" de collecte) présentes dans les données.
+        "source_brands": srcb["source_brand"].tolist(),
     }
 
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
-def tab_overview(start, end, entities, platforms, types, langs, gran):
-    w   = _where(start, end, entities, platforms, types, langs)
+def tab_overview(start, end, entities, platforms, types, langs, gran, source_brands=None):
+    w   = _where(start, end, entities, platforms, types, langs, source_brands=source_brands)
     bkt = _bucket(gran)
 
     # KPIs
@@ -248,7 +252,7 @@ def tab_overview(start, end, entities, platforms, types, langs, gran):
     # Top themes + Volume par plateforme
     th = q(f"""
         SELECT theme, count() mentions FROM {DT}
-        WHERE {_where(start, end, entities, platforms, types, langs, "theme != ''")}
+        WHERE {_where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands)}
         GROUP BY theme ORDER BY mentions DESC LIMIT 8
     """)
     bp = q(f"SELECT platform, {REC} total FROM {DT} WHERE {w} GROUP BY platform ORDER BY total DESC")
@@ -268,9 +272,11 @@ def tab_overview(start, end, entities, platforms, types, langs, gran):
             show(fig4, use_container_width=True)
 
 
-def tab_competition(start, end, entities, platforms, types, langs, gran):
+def tab_competition(start, end, entities, platforms, types, langs, gran, source_brands=None):
     bkt = _bucket(gran)
-    w   = _where(start, end, [], platforms, types, langs)
+    # filtre entity volontairement ignoré (on compare toutes les marques) ; le
+    # filtre page-source ("terrain") est appliqué.
+    w   = _where(start, end, [], platforms, types, langs, source_brands=source_brands)
 
     # entity vient de DT (côté gauche) — jamais vide ; display_name/brand_group
     # retombent sur l'entité si absents de dim_brand. Nonidentifié est exclu :
@@ -366,8 +372,8 @@ def tab_competition(start, end, entities, platforms, types, langs, gran):
     st.dataframe(table.reset_index(drop=True), use_container_width=True)
 
 
-def tab_sentiment(start, end, entities, platforms, types, langs, gran):
-    w = _where(start, end, entities, platforms, types, langs)
+def tab_sentiment(start, end, entities, platforms, types, langs, gran, source_brands=None):
+    w = _where(start, end, entities, platforms, types, langs, source_brands=source_brands)
 
     by_entity = q(f"""
         SELECT entity, {POS} positive, {NEG} negative, {NEU} neutral,
@@ -397,7 +403,7 @@ def tab_sentiment(start, end, entities, platforms, types, langs, gran):
     # Heatmap brand × theme
     hm = q(f"""
         SELECT entity, theme, round(avg(theme_score),3) avg_score, count() total
-        FROM {DT} WHERE {_where(start, end, entities, platforms, types, langs, "theme != ''")}
+        FROM {DT} WHERE {_where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands)}
         GROUP BY entity, theme
     """)
     if not hm.empty:
@@ -421,9 +427,9 @@ def tab_sentiment(start, end, entities, platforms, types, langs, gran):
         show(fig3, use_container_width=True)
 
 
-def tab_themes(start, end, entities, platforms, types, langs, gran):
+def tab_themes(start, end, entities, platforms, types, langs, gran, source_brands=None):
     bkt = _bucket(gran)
-    wt  = _where(start, end, entities, platforms, types, langs, "theme != ''")
+    wt  = _where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands)
 
     freq = q(f"""
         SELECT theme, count() mentions,
@@ -463,9 +469,9 @@ def tab_themes(start, end, entities, platforms, types, langs, gran):
         show(fig3, use_container_width=True)
 
 
-def tab_boycott(start, end, entities, platforms, types, langs, gran):
+def tab_boycott(start, end, entities, platforms, types, langs, gran, source_brands=None):
     bkt = _bucket(gran)
-    w   = _where(start, end, entities, platforms, types, langs)
+    w   = _where(start, end, entities, platforms, types, langs, source_brands=source_brands)
 
     trend = q(f"""
         SELECT {bkt} bucket, {REC} total, {BOY} boycott,
@@ -513,9 +519,9 @@ def tab_boycott(start, end, entities, platforms, types, langs, gran):
             show(fig4, use_container_width=True)
 
 
-def tab_engagement(start, end, entities, platforms, types, langs, gran):
+def tab_engagement(start, end, entities, platforms, types, langs, gran, source_brands=None):
     bkt = _bucket(gran)
-    w   = _where(start, end, entities, platforms, types, langs)
+    w   = _where(start, end, entities, platforms, types, langs, source_brands=source_brands)
     base = f"(SELECT DISTINCT record_id, platform, record_type, overall_sentiment, record_date FROM {DT} WHERE {w})"
 
     by_sent = q(f"""
@@ -584,8 +590,8 @@ def tab_engagement(start, end, entities, platforms, types, langs, gran):
             show(fig4, use_container_width=True)
 
 
-def tab_language(start, end, entities, platforms, types, langs, gran):
-    w = _where(start, end, entities, platforms, types, langs, "language IS NOT NULL")
+def tab_language(start, end, entities, platforms, types, langs, gran, source_brands=None):
+    w = _where(start, end, entities, platforms, types, langs, "language IS NOT NULL", source_brands=source_brands)
 
     dist = q(f"""
         SELECT language, {REC} records, {POS} positives, {NEG} negatives, {NEU} neutrals
@@ -708,7 +714,7 @@ def tab_authors(platforms):
     st.dataframe(disp.reset_index(drop=True), use_container_width=True)
 
 
-def tab_explorer(start, end, entities, platforms, types, langs, all_themes):
+def tab_explorer(start, end, entities, platforms, types, langs, all_themes, source_brands=None):
     st.subheader("Explorateur de publications")
 
     col1, col2, col3, col4 = st.columns([2,2,1,1])
@@ -723,11 +729,12 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes):
     if boycott:                extra_parts.append("boycott_signal = 1")
 
     w = _where(start, end, entities, platforms, types, langs,
-               " AND ".join(extra_parts) if extra_parts else "")
+               " AND ".join(extra_parts) if extra_parts else "",
+               source_brands=source_brands)
 
     df = q(f"""
         SELECT record_id, record_date, platform, record_type, language,
-               entity, theme, theme_sentiment, overall_sentiment,
+               source_brand, entity, theme, theme_sentiment, overall_sentiment,
                round(overall_score,3) overall_score, boycott_signal,
                author, url, text
         FROM {DT} WHERE {w}
@@ -754,6 +761,7 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes):
             "<tr>"
             f"<td style='white-space:nowrap'>{str(r['record_date'])[:10]}</td>"
             f"<td>{html.escape(str(r['platform'] or ''))}</td>"
+            f"<td>{html.escape(str(r['source_brand'] or ''))}</td>"
             f"<td>{html.escape(str(r['entity'] or ''))}</td>"
             f"<td>{html.escape(str(r['theme'] or ''))}</td>"
             f"<td style='color:{sc};font-weight:600'>{html.escape(str(r['overall_sentiment'] or ''))}</td>"
@@ -770,7 +778,8 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes):
         "<thead><tr style='position:sticky;top:0;background:#1e2530;color:#fff'>"
         "<th style='padding:6px 8px;text-align:left'>Date</th>"
         "<th style='padding:6px 8px;text-align:left'>Plateforme</th>"
-        "<th style='padding:6px 8px;text-align:left'>Marque</th>"
+        "<th style='padding:6px 8px;text-align:left'>Page source</th>"
+        "<th style='padding:6px 8px;text-align:left'>Marque citée</th>"
         "<th style='padding:6px 8px;text-align:left'>Thème</th>"
         "<th style='padding:6px 8px;text-align:left'>Sentiment</th>"
         "<th style='padding:6px 8px'>Boy.</th>"
@@ -829,7 +838,18 @@ def main():
         brands_df = meta["brands"]
         brand_labels = {r["entity"]: r["display_name"] + (" ★" if r["is_own"] else "")
                         for _, r in brands_df.iterrows()} if not brands_df.empty else {}
-        entities  = st.multiselect("Marques",     list(brand_labels.keys()), format_func=lambda x: brand_labels.get(x,x))
+        entities  = st.multiselect(
+            "Marque mentionnée", list(brand_labels.keys()),
+            format_func=lambda x: brand_labels.get(x, x),
+            help="Marque CITÉE dans le texte (détectée par le NLP).")
+        # Page source / terrain — d'où le record a été collecté (axe indépendant
+        # de la marque mentionnée). Réutilise les libellés des marques.
+        source_brands = st.multiselect(
+            "Page source / terrain", meta.get("source_brands", []),
+            format_func=lambda x: brand_labels.get(x, x),
+            help="Page officielle D'OÙ le record vient. Croisez-la avec « Marque "
+                 "mentionnée » : page = Marjane City + mention = Carrefour Express "
+                 "→ sommes-nous cités chez le concurrent.")
         platforms = st.multiselect("Plateformes", meta["platforms"])
         types     = st.multiselect("Type",        meta["types"],
                                    format_func=lambda x: "Post" if x=="post" else "Commentaire")
@@ -849,7 +869,7 @@ def main():
         "Boycott","Engagement","Langue","Topics","Auteurs","Explorer",
     ])
 
-    args = (start_s, end_s, entities, platforms, types, langs, gran)
+    args = (start_s, end_s, entities, platforms, types, langs, gran, source_brands)
 
     with tabs[0]:
         try:    tab_overview(*args)
@@ -888,7 +908,7 @@ def main():
         except Exception as e: st.error(f"Erreur : {e}")
 
     with tabs[9]:
-        try:    tab_explorer(start_s, end_s, entities, platforms, types, langs, meta["themes"])
+        try:    tab_explorer(start_s, end_s, entities, platforms, types, langs, meta["themes"], source_brands)
         except Exception as e: st.error(f"Erreur : {e}")
 
 
