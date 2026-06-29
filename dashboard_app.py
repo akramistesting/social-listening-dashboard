@@ -863,10 +863,10 @@ def main():
     start_s = str(start)
     end_s   = str(end)
 
-    # ── 10 tabs ──
+    # ── tabs ──
     tabs = st.tabs([
         "Vue d'ensemble","Concurrence","Sentiment","Thèmes",
-        "Boycott","Engagement","Langue","Topics","Auteurs","Explorer",
+        "Boycott","Engagement","Langue","Auteurs","Explorer",
     ])
 
     args = (start_s, end_s, entities, platforms, types, langs, gran, source_brands)
@@ -900,14 +900,10 @@ def main():
         except Exception as e: st.error(f"Erreur : {e}")
 
     with tabs[7]:
-        try:    tab_topics()
-        except Exception as e: st.error(f"Erreur : {e}")
-
-    with tabs[8]:
         try:    tab_authors(platforms)
         except Exception as e: st.error(f"Erreur : {e}")
 
-    with tabs[9]:
+    with tabs[8]:
         try:    tab_explorer(start_s, end_s, entities, platforms, types, langs, meta["themes"], source_brands)
         except Exception as e: st.error(f"Erreur : {e}")
 
