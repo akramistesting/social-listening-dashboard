@@ -135,7 +135,8 @@ def _bucket(gran: str) -> str:
     if gran == "week":   return "toStartOfWeek(record_date, 1)"
     return "record_date"
 
-def _where(start, end, entities, platforms, types, langs, extra="", source_brands=None) -> str:
+def _where(start, end, entities, platforms, types, langs, extra="", source_brands=None,
+           brand_reply="exclude") -> str:
     parts = ["record_date IS NOT NULL"]
     if start: parts.append(f"record_date >= '{start}'")
     if end:   parts.append(f"record_date <= '{end}'")
@@ -147,6 +148,11 @@ def _where(start, end, entities, platforms, types, langs, extra="", source_brand
         _in("language",     langs),
     ]:
         if clause: parts.append(clause)
+    # Réponses de la marque (community management) : par défaut exclues des agrégats
+    # voix-client pour ne pas gonfler le sentiment positif. L'explorer peut passer
+    # "only" (réponses marque seules) ou "all" (tout) pour les inspecter.
+    if   brand_reply == "exclude": parts.append("is_brand_reply = 0")
+    elif brand_reply == "only":    parts.append("is_brand_reply = 1")
     if extra: parts.append(extra)
     return " AND ".join(parts)
 
@@ -717,11 +723,20 @@ def tab_authors(platforms):
 def tab_explorer(start, end, entities, platforms, types, langs, all_themes, source_brands=None):
     st.subheader("Explorateur de publications")
 
-    col1, col2, col3, col4 = st.columns([2,2,1,1])
+    col1, col2, col3, col4, col5 = st.columns([2,2,2,1,1])
     theme_sel = col1.selectbox("Thème", ["Tous"] + all_themes)
     sent_sel  = col2.selectbox("Sentiment", ["Tous","Positif","Négatif","Neutre"])
-    boycott   = col3.checkbox("Boycott seulement")
-    limit     = col4.number_input("Limite", min_value=10, max_value=500, value=200, step=10)
+    # Auteur : par défaut on n'affiche que les clients (réponses de la marque exclues).
+    # "Réponses de la marque seules" → inspection de la qualité du community management
+    # (le nôtre ET celui des concurrents, à croiser avec « Page source / terrain »).
+    author_opts = {
+        "Clients (hors marque)":          "exclude",
+        "Réponses de la marque seules":   "only",
+        "Tout (clients + marque)":        "all",
+    }
+    author_sel = col3.selectbox("Auteur", list(author_opts.keys()))
+    boycott   = col4.checkbox("Boycott seulement")
+    limit     = col5.number_input("Limite", min_value=10, max_value=500, value=200, step=10)
 
     extra_parts = []
     if theme_sel != "Tous":    extra_parts.append(f"theme = '{_esc(theme_sel)}'")
@@ -730,12 +745,13 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
 
     w = _where(start, end, entities, platforms, types, langs,
                " AND ".join(extra_parts) if extra_parts else "",
-               source_brands=source_brands)
+               source_brands=source_brands,
+               brand_reply=author_opts[author_sel])
 
     df = q(f"""
         SELECT record_id, record_date, platform, record_type, language,
                source_brand, entity, theme, theme_sentiment, overall_sentiment,
-               round(overall_score,3) overall_score, boycott_signal,
+               round(overall_score,3) overall_score, boycott_signal, is_brand_reply,
                author, url, text
         FROM {DT} WHERE {w}
         ORDER BY record_date DESC LIMIT {int(limit)}
@@ -757,6 +773,10 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
         src = (f"<a href='{html.escape(url)}' target='_blank' "
                f"style='color:#2563eb;text-decoration:none;white-space:nowrap'>Voir ↗</a>"
                if url.startswith("http") else "")
+        # 🏢 = réponse postée par une page de marque (community management).
+        badge = ("<span title='Réponse de la marque' "
+                 "style='color:#2563eb'>🏢 </span>") if r.get("is_brand_reply") else ""
+        author = html.escape(str(r["author"] or ""))
         rows_html.append(
             "<tr>"
             f"<td style='white-space:nowrap'>{str(r['record_date'])[:10]}</td>"
@@ -767,6 +787,7 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
             f"<td style='color:{sc};font-weight:600'>{html.escape(str(r['overall_sentiment'] or ''))}</td>"
             f"<td style='text-align:center'>{boy}</td>"
             f"<td>{html.escape(str(r['language'] or ''))}</td>"
+            f"<td style='white-space:nowrap'>{badge}{author}</td>"
             f"<td style='max-width:480px'>{txt}</td>"
             f"<td>{src}</td>"
             "</tr>"
@@ -784,6 +805,7 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
         "<th style='padding:6px 8px;text-align:left'>Sentiment</th>"
         "<th style='padding:6px 8px'>Boy.</th>"
         "<th style='padding:6px 8px;text-align:left'>Langue</th>"
+        "<th style='padding:6px 8px;text-align:left'>Auteur</th>"
         "<th style='padding:6px 8px;text-align:left'>Texte</th>"
         "<th style='padding:6px 8px;text-align:left'>Source</th>"
         "</tr></thead><tbody>"
