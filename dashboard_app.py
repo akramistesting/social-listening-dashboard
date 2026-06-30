@@ -726,13 +726,17 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
     col1, col2, col3, col4, col5 = st.columns([2,2,2,1,1])
     theme_sel = col1.selectbox("Thème", ["Tous"] + all_themes)
     sent_sel  = col2.selectbox("Sentiment", ["Tous","Positif","Négatif","Neutre"])
-    # Auteur : par défaut on n'affiche que les clients (réponses de la marque exclues).
-    # "Réponses de la marque seules" → inspection de la qualité du community management
-    # (le nôtre ET celui des concurrents, à croiser avec « Page source / terrain »).
+    # Auteur :
+    #  - "Clients" = commentaires de vrais utilisateurs uniquement. On exclut À LA FOIS
+    #    les POSTS (caption de la page = voix de marque, pas un client) ET les réponses
+    #    CM (is_brand_reply=1).
+    #  - "Réponses de la marque seules" = commentaires postés par une page de marque
+    #    (le nôtre ET les concurrents), pour auditer la qualité du community management.
+    #  - "Tout" = posts + tous les commentaires.
     author_opts = {
-        "Clients (hors marque)":          "exclude",
-        "Réponses de la marque seules":   "only",
-        "Tout (clients + marque)":        "all",
+        "Clients (hors marque)":          "clients",
+        "Réponses de la marque seules":   "brand",
+        "Tout (posts + commentaires)":    "all",
     }
     author_sel = col3.selectbox("Auteur", list(author_opts.keys()))
     boycott   = col4.checkbox("Boycott seulement")
@@ -742,11 +746,16 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
     if theme_sel != "Tous":    extra_parts.append(f"theme = '{_esc(theme_sel)}'")
     if sent_sel  != "Tous":    extra_parts.append(f"overall_sentiment = '{_esc(sent_sel)}'")
     if boycott:                extra_parts.append("boycott_signal = 1")
+    mode = author_opts[author_sel]
+    if   mode == "clients": extra_parts.append("record_type = 'comment' AND is_brand_reply = 0")
+    elif mode == "brand":   extra_parts.append("is_brand_reply = 1")
 
+    # brand_reply="all" : l'explorer gère lui-même le filtre Auteur ci-dessus ; on ne
+    # veut pas que _where ré-applique son exclusion par défaut (qui garderait les posts).
     w = _where(start, end, entities, platforms, types, langs,
                " AND ".join(extra_parts) if extra_parts else "",
                source_brands=source_brands,
-               brand_reply=author_opts[author_sel])
+               brand_reply="all")
 
     df = q(f"""
         SELECT record_id, record_date, platform, record_type, language,
