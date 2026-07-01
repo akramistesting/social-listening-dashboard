@@ -136,7 +136,17 @@ def _bucket(gran: str) -> str:
     return "record_date"
 
 def _where(start, end, entities, platforms, types, langs, extra="", source_brands=None,
-           brand_reply="exclude") -> str:
+           scope="voc") -> str:
+    """
+    scope pilote le périmètre voix-client / voix-marque via is_brand_voice :
+      - "voc"   (défaut) : is_brand_voice=0 → uniquement le contenu écrit par des
+                 utilisateurs (commentaires clients + posts de GROUPES par des users).
+                 Exclut les posts de pages officielles et les réponses CM.
+      - "brand" : is_brand_voice=1 → contenu écrit par une page de marque.
+      - "all"   : aucun filtre (activité/portée : volume, engagement, part de voix).
+    is_brand_voice est calculé dans fct_comment_drillthrough (authorship + contexte),
+    donc le périmètre reste correct le jour où on ajoute les groupes Facebook.
+    """
     parts = ["record_date IS NOT NULL"]
     if start: parts.append(f"record_date >= '{start}'")
     if end:   parts.append(f"record_date <= '{end}'")
@@ -148,11 +158,8 @@ def _where(start, end, entities, platforms, types, langs, extra="", source_brand
         _in("language",     langs),
     ]:
         if clause: parts.append(clause)
-    # Réponses de la marque (community management) : par défaut exclues des agrégats
-    # voix-client pour ne pas gonfler le sentiment positif. L'explorer peut passer
-    # "only" (réponses marque seules) ou "all" (tout) pour les inspecter.
-    if   brand_reply == "exclude": parts.append("is_brand_reply = 0")
-    elif brand_reply == "only":    parts.append("is_brand_reply = 1")
+    if   scope == "voc":   parts.append("is_brand_voice = 0")
+    elif scope == "brand": parts.append("is_brand_voice = 1")
     if extra: parts.append(extra)
     return " AND ".join(parts)
 
@@ -195,33 +202,39 @@ def load_meta():
 # ── Tabs ──────────────────────────────────────────────────────────────────────
 
 def tab_overview(start, end, entities, platforms, types, langs, gran, source_brands=None):
-    w   = _where(start, end, entities, platforms, types, langs, source_brands=source_brands)
-    bkt = _bucket(gran)
+    # w      = voix client (défaut) → sert aux taux de sentiment et à la tendance.
+    # w_all  = tout le contenu (posts inclus) → sert au VOLUME et à l'ENGAGEMENT.
+    w     = _where(start, end, entities, platforms, types, langs, source_brands=source_brands)
+    w_all = _where(start, end, entities, platforms, types, langs, source_brands=source_brands, scope="all")
+    bkt   = _bucket(gran)
 
-    # KPIs
+    # KPIs de perception (voix client) : dénominateur = commentaires clients.
     kpi = q(f"""
         SELECT {REC} records, {POS} pos, {NEG} neg, {NEU} neu, {BOY} boy,
                round(avg(overall_score), 3) avg_score
         FROM {DT} WHERE {w}
     """)
+    # Volume total publié (posts de marque inclus) — KPI d'activité.
+    vol = q(f"SELECT {REC} records FROM {DT} WHERE {w_all}")
     eng = q(f"""
         SELECT sum(r.likes + r.comments_count + r.shares) total
-        FROM (SELECT DISTINCT record_id FROM {DT} WHERE {w}) d
+        FROM (SELECT DISTINCT record_id FROM {DT} WHERE {w_all}) d
         INNER JOIN {RAW_ENG} r USING (record_id)
     """)
 
-    recs  = int(kpi["records"].iloc[0]) if not kpi.empty else 0
+    voc_recs = int(kpi["records"].iloc[0]) if not kpi.empty else 0
     pos_n = int(kpi["pos"].iloc[0])     if not kpi.empty else 0
     neg_n = int(kpi["neg"].iloc[0])     if not kpi.empty else 0
     neu_n = int(kpi["neu"].iloc[0])     if not kpi.empty else 0
     boy_n = int(kpi["boy"].iloc[0])     if not kpi.empty else 0
     score = float(kpi["avg_score"].iloc[0]) if not kpi.empty else 0.0
+    total_recs = int(vol["records"].iloc[0]) if not vol.empty else 0
     engv  = int(eng["total"].iloc[0])   if not eng.empty and eng["total"].iloc[0] else 0
-    den   = recs or 1
+    den   = voc_recs or 1
 
     c1,c2,c3,c4,c5,c6 = st.columns(6)
-    c1.metric("Publications",    fmt(recs))
-    c2.metric("Taux positif",    f"{round(pos_n/den*100,1)}%")
+    c1.metric("Publications",    fmt(total_recs), help="Volume total publié (posts de marque inclus).")
+    c2.metric("Taux positif",    f"{round(pos_n/den*100,1)}%", help=f"% sur {fmt(voc_recs)} messages clients (voix client).")
     c3.metric("Taux négatif",    f"{round(neg_n/den*100,1)}%")
     c4.metric("Taux boycott",    f"{round(boy_n/den*100,1)}%")
     c5.metric("Score moyen",     f"{score:+.3f}")
@@ -261,7 +274,7 @@ def tab_overview(start, end, entities, platforms, types, langs, gran, source_bra
         WHERE {_where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands)}
         GROUP BY theme ORDER BY mentions DESC LIMIT 8
     """)
-    bp = q(f"SELECT platform, {REC} total FROM {DT} WHERE {w} GROUP BY platform ORDER BY total DESC")
+    bp = q(f"SELECT platform, {REC} total FROM {DT} WHERE {w_all} GROUP BY platform ORDER BY total DESC")
 
     col3, col4 = st.columns(2)
     with col3:
@@ -282,7 +295,9 @@ def tab_competition(start, end, entities, platforms, types, langs, gran, source_
     bkt = _bucket(gran)
     # filtre entity volontairement ignoré (on compare toutes les marques) ; le
     # filtre page-source ("terrain") est appliqué.
-    w   = _where(start, end, [], platforms, types, langs, source_brands=source_brands)
+    # w = voix client (SOV + taux de sentiment) ; w_all = tout (engagement/portée).
+    w     = _where(start, end, [], platforms, types, langs, source_brands=source_brands)
+    w_all = _where(start, end, [], platforms, types, langs, source_brands=source_brands, scope="all")
 
     # entity vient de DT (côté gauche) — jamais vide ; display_name/brand_group
     # retombent sur l'entité si absents de dim_brand. Nonidentifié est exclu :
@@ -311,10 +326,10 @@ def tab_competition(start, end, entities, platforms, types, langs, gran, source_
     brands_df["display_name"] = brands_df["display_name"].fillna(brands_df["entity"])
     brands_df["brand_group"]  = brands_df["brand_group"].fillna(brands_df["entity"])
 
-    # Engagement
+    # Engagement (portée) → tout le contenu, posts inclus.
     eng = q(f"""
         SELECT d.entity entity, sum(r.likes + r.comments_count + r.shares) eng
-        FROM (SELECT DISTINCT record_id, entity FROM {DT} WHERE {w}) d
+        FROM (SELECT DISTINCT record_id, entity FROM {DT} WHERE {w_all}) d
         INNER JOIN {RAW_ENG} r USING (record_id)
         GROUP BY entity
     """)
@@ -526,8 +541,10 @@ def tab_boycott(start, end, entities, platforms, types, langs, gran, source_bran
 
 
 def tab_engagement(start, end, entities, platforms, types, langs, gran, source_brands=None):
+    # Onglet d'ACTIVITÉ/portée : on garde tout le contenu (posts de marque inclus,
+    # car ils génèrent l'essentiel de l'engagement) → scope="all".
     bkt = _bucket(gran)
-    w   = _where(start, end, entities, platforms, types, langs, source_brands=source_brands)
+    w   = _where(start, end, entities, platforms, types, langs, source_brands=source_brands, scope="all")
     base = f"(SELECT DISTINCT record_id, platform, record_type, overall_sentiment, record_date FROM {DT} WHERE {w})"
 
     by_sent = q(f"""
@@ -726,17 +743,17 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
     col1, col2, col3, col4, col5 = st.columns([2,2,2,1,1])
     theme_sel = col1.selectbox("Thème", ["Tous"] + all_themes)
     sent_sel  = col2.selectbox("Sentiment", ["Tous","Positif","Négatif","Neutre"])
-    # Auteur :
-    #  - "Clients" = commentaires de vrais utilisateurs uniquement. On exclut À LA FOIS
-    #    les POSTS (caption de la page = voix de marque, pas un client) ET les réponses
-    #    CM (is_brand_reply=1).
-    #  - "Réponses de la marque seules" = commentaires postés par une page de marque
-    #    (le nôtre ET les concurrents), pour auditer la qualité du community management.
-    #  - "Tout" = posts + tous les commentaires.
+    # Auteur (basé sur is_brand_voice — authorship + contexte) :
+    #  - "Voix client"        = is_brand_voice=0 : contenu écrit par des utilisateurs
+    #    (commentaires clients + posts de GROUPES par des users). Exclut posts de page
+    #    et réponses CM.
+    #  - "Contenu de la marque" = is_brand_voice=1 : posts de pages officielles + réponses
+    #    CM (le nôtre ET les concurrents) → pour auditer notre communication.
+    #  - "Tout".
     author_opts = {
-        "Clients (hors marque)":          "clients",
-        "Réponses de la marque seules":   "brand",
-        "Tout (posts + commentaires)":    "all",
+        "Voix client (hors marque)":        "voc",
+        "Contenu de la marque":             "brand",
+        "Tout":                             "all",
     }
     author_sel = col3.selectbox("Auteur", list(author_opts.keys()))
     boycott   = col4.checkbox("Boycott seulement")
@@ -746,21 +763,17 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
     if theme_sel != "Tous":    extra_parts.append(f"theme = '{_esc(theme_sel)}'")
     if sent_sel  != "Tous":    extra_parts.append(f"overall_sentiment = '{_esc(sent_sel)}'")
     if boycott:                extra_parts.append("boycott_signal = 1")
-    mode = author_opts[author_sel]
-    if   mode == "clients": extra_parts.append("record_type = 'comment' AND is_brand_reply = 0")
-    elif mode == "brand":   extra_parts.append("is_brand_reply = 1")
 
-    # brand_reply="all" : l'explorer gère lui-même le filtre Auteur ci-dessus ; on ne
-    # veut pas que _where ré-applique son exclusion par défaut (qui garderait les posts).
+    # Le périmètre Auteur est délégué à _where via scope (is_brand_voice).
     w = _where(start, end, entities, platforms, types, langs,
                " AND ".join(extra_parts) if extra_parts else "",
                source_brands=source_brands,
-               brand_reply="all")
+               scope=author_opts[author_sel])
 
     df = q(f"""
         SELECT record_id, record_date, platform, record_type, language,
                source_brand, entity, theme, theme_sentiment, overall_sentiment,
-               round(overall_score,3) overall_score, boycott_signal, is_brand_reply,
+               round(overall_score,3) overall_score, boycott_signal, is_brand_voice,
                author, url, text
         FROM {DT} WHERE {w}
         ORDER BY record_date DESC LIMIT {int(limit)}
@@ -782,9 +795,9 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
         src = (f"<a href='{html.escape(url)}' target='_blank' "
                f"style='color:#2563eb;text-decoration:none;white-space:nowrap'>Voir ↗</a>"
                if url.startswith("http") else "")
-        # 🏢 = réponse postée par une page de marque (community management).
-        badge = ("<span title='Réponse de la marque' "
-                 "style='color:#2563eb'>🏢 </span>") if r.get("is_brand_reply") else ""
+        # 🏢 = contenu écrit par une page de marque (post officiel ou réponse CM).
+        badge = ("<span title='Contenu de la marque' "
+                 "style='color:#2563eb'>🏢 </span>") if r.get("is_brand_voice") else ""
         author = html.escape(str(r["author"] or ""))
         rows_html.append(
             "<tr>"
