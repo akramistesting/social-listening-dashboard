@@ -786,6 +786,11 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
     if df.empty:
         return
 
+    # clickhouse-connect renvoie des pd.NA (dtypes nullable) pour les colonnes
+    # Nullable(...) — bool(pd.NA) lève "boolean value of NA is ambiguous" dans les
+    # `x or default` ci-dessous. On les convertit en None (falsy, sans ambiguïté).
+    df = df.where(df.notna(), None)
+
     # Rendu en tableau HTML : les emojis et le texte RTL (arabe/darija) s'affichent
     # nativement, et la colonne « Source » est un lien cliquable vers la publication.
     sent_color = {"Positif": "#16a34a", "Négatif": "#dc2626", "Neutre": "#64748b"}
