@@ -81,7 +81,7 @@ def _make_client():
         autogenerate_session_id=False,
         # Le tunnel ngrok gratuit sert une page d'avertissement HTML aux requêtes
         # sans ce header, au lieu de les transmettre à ClickHouse (ERR_NGROK_6024).
-        http_headers={"ngrok-skip-browser-warning": "true"} if "ngrok" in CH_HOST else None,
+        headers={"ngrok-skip-browser-warning": "true"} if "ngrok" in CH_HOST else None,
     )
 
 
