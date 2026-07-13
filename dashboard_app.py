@@ -79,6 +79,9 @@ def _make_client():
         # exécutées en parallèle par Streamlit, se bloquent mutuellement
         # ("concurrent queries within the same session").
         autogenerate_session_id=False,
+        # Le tunnel ngrok gratuit sert une page d'avertissement HTML aux requêtes
+        # sans ce header, au lieu de les transmettre à ClickHouse (ERR_NGROK_6024).
+        http_headers={"ngrok-skip-browser-warning": "true"} if "ngrok" in CH_HOST else None,
     )
 
 
@@ -790,14 +793,14 @@ def tab_explorer(start, end, entities, platforms, types, langs, all_themes, sour
     for _, r in df.iterrows():
         txt = html.escape(str(r["text"] or "").strip())[:400] or "<span style='color:#94a3b8'>(emoji/réaction sans texte)</span>"
         sc  = sent_color.get(r["overall_sentiment"], "#64748b")
-        boy = "🚫" if r["boycott_signal"] else ""
+        boy = "🚫" if (pd.notna(r["boycott_signal"]) and r["boycott_signal"]) else ""
         url = str(r["url"] or "")
         src = (f"<a href='{html.escape(url)}' target='_blank' "
                f"style='color:#2563eb;text-decoration:none;white-space:nowrap'>Voir ↗</a>"
                if url.startswith("http") else "")
         # 🏢 = contenu écrit par une page de marque (post officiel ou réponse CM).
         badge = ("<span title='Contenu de la marque' "
-                 "style='color:#2563eb'>🏢 </span>") if r.get("is_brand_voice") else ""
+                 "style='color:#2563eb'>🏢 </span>") if (pd.notna(r.get("is_brand_voice")) and r.get("is_brand_voice")) else ""
         author = html.escape(str(r["author"] or ""))
         rows_html.append(
             "<tr>"
