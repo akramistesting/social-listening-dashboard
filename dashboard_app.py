@@ -717,19 +717,11 @@ def tab_authors(platforms):
         return
 
     top10 = d.head(10)
-    det10 = d[d["records"] >= 2].sort_values("negative_pct", ascending=False).head(10)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.bar(top10, x="total_engagement", y="author", orientation="h",
-                     title="Top auteurs — engagement", color_discrete_sequence=[C_OWN])
-        fig.update_layout(height=320, margin=dict(t=40,b=20), showlegend=False)
-        show(fig, use_container_width=True)
-    with col2:
-        fig2 = px.bar(det10, x="negative_pct", y="author", orientation="h",
-                      title="Détracteurs (% négatif élevé)", color_discrete_sequence=[C_NEG])
-        fig2.update_layout(height=320, margin=dict(t=40,b=20), showlegend=False)
-        show(fig2, use_container_width=True)
+    fig = px.bar(top10, x="total_engagement", y="author", orientation="h",
+                 title="Top auteurs — engagement", color_discrete_sequence=[C_OWN])
+    fig.update_layout(height=320, margin=dict(t=40,b=20), showlegend=False)
+    show(fig, use_container_width=True)
 
     st.subheader("Détail des auteurs")
     disp = d.rename(columns={
