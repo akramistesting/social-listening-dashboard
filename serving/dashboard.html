@@ -97,8 +97,12 @@ tr:hover td{background:var(--panel2);}
     </div>
   </div>
   <div class="fgroup">
-    <span class="flabel" title="Une publication peut citer plusieurs marques ; elle est alors comptée pour chacune. La somme par marque peut donc dépasser le total de publications uniques.">Marques&nbsp;ⓘ</span>
+    <span class="flabel" title="Marque CITÉE dans le texte du record (détectée par le NLP). Une publication peut citer plusieurs marques ; elle est alors comptée pour chacune. La somme par marque peut donc dépasser le total de publications uniques.">Marque mentionnée&nbsp;ⓘ</span>
     <div class="pills" id="f-entities"></div>
+  </div>
+  <div class="fgroup">
+    <span class="flabel" title="Page officielle D'OÙ le record a été collecté (le « terrain »). Croisez-la avec « Marque mentionnée » : p.ex. page = Marjane City + mention = Carrefour Express → sommes-nous cités chez le concurrent.">Page source / terrain&nbsp;ⓘ</span>
+    <div class="pills" id="f-source-brands"></div>
   </div>
   <div class="fgroup">
     <span class="flabel">Plateformes</span>
@@ -253,7 +257,7 @@ tr:hover td{background:var(--panel2);}
       <span class="muted ms-auto" id="ex-count"></span>
     </div>
     <div class="card"><div class="scroll" style="max-height:600px;"><table id="t-comments"><thead><tr>
-      <th>Date</th><th>Plateforme</th><th>Marque</th><th>Thème</th><th>Sent.</th><th>Boy.</th><th>Langue</th><th>Texte</th>
+      <th>Date</th><th>Plateforme</th><th>Page source</th><th>Marque citée</th><th>Thème</th><th>Sent.</th><th>Boy.</th><th>Langue</th><th>Texte</th>
     </tr></thead><tbody></tbody></table></div></div>
   </div>
 
@@ -275,6 +279,7 @@ const state = {
   meta:null, gran:'month',
   start:null, end:null,
   entities:new Set(), platforms:new Set(), types:new Set(), langs:new Set(),
+  sourceBrands:new Set(),   // page source / terrain de collecte
   compare:new Set(), compareReady:false,   // Concurrence: brands shown individually
   tab:'overview',
 };
@@ -286,6 +291,7 @@ function qstr(extra={}){
   if(state.start) p.set('start', state.start);
   if(state.end)   p.set('end', state.end);
   if(state.entities.size)  p.set('entities',  [...state.entities].join(','));
+  if(state.sourceBrands.size) p.set('source_brands', [...state.sourceBrands].join(','));
   if(state.platforms.size) p.set('platforms', [...state.platforms].join(','));
   if(state.types.size)     p.set('record_types', [...state.types].join(','));
   if(state.langs.size)     p.set('langs', [...state.langs].join(','));
@@ -361,6 +367,14 @@ function pill(container, label, value, set, ownFlag){
 function buildFilters(m){
   const ent = document.getElementById('f-entities'); ent.innerHTML='';
   m.brands.forEach(b => pill(ent, b.display_name + (b.is_own?' ★':''), b.entity, state.entities, b.is_own));
+  // Page source / terrain — réutilise les libellés des marques quand le token correspond
+  const dn = {}, own = {};
+  m.brands.forEach(b => { dn[b.entity] = b.display_name; own[b.entity] = b.is_own; });
+  const sb = document.getElementById('f-source-brands'); sb.innerHTML='';
+  (m.source_brands||[]).forEach(s => {
+    const label = (dn[s] || s) + (own[s]?' ★':'');
+    pill(sb, label, s, state.sourceBrands, own[s]);
+  });
   const pl = document.getElementById('f-platforms'); pl.innerHTML='';
   m.platforms.forEach(p => pill(pl, p, p, state.platforms, false));
   const ty = document.getElementById('f-types'); ty.innerHTML='';
@@ -435,9 +449,13 @@ async function loadOverview(){
     {label:'Neutre',  data:ts.map(r=>r.neu), borderColor:C.neu, fill:false, tension:.3, pointRadius:2},
   ]}});
 
+  const sentCounts = [c.pos, c.neg, c.neu];
   chart('c-sentpie', {type:'doughnut', data:{labels:['Positif','Négatif','Neutre'],
     datasets:[{data:[c.pos_rate,c.neg_rate,c.neu_rate], backgroundColor:[C.pos,C.neg,C.neu], borderColor:'#11161f', borderWidth:2}]},
-    options:{cutout:'62%', plugins:{datalabels:{display:true,color:'#fff',font:{size:10,weight:'bold'},formatter:v=>v.toFixed(1)+'%'}}}});
+    options:{cutout:'62%', plugins:{datalabels:{display:true, font:{size:9,weight:'bold'}, labels:{
+      value:   {color:'#cfd6dd', align:'top',    offset:4, formatter:(v,ctx)=>fmt(sentCounts[ctx.dataIndex])},
+      percent: {color:'#fff',    align:'bottom', offset:4, formatter:v=>v.toFixed(1)+'%'},
+    }}}}});
 
   const th = await api('/api/themes');
   const tf = th.frequency.slice(0,8);
@@ -520,17 +538,25 @@ async function loadCompetition(){
   // Part de voix (mentions)
   chart('c-grpsov', {type:'doughnut', data:{labels:rows.map(r=>r.label),
     datasets:[{data:rows.map(r=>r.records), backgroundColor:rows.map(colorOf), borderColor:'#11161f', borderWidth:2}]},
-    options:{cutout:'58%', plugins:{datalabels:{display:true,color:'#fff',font:{size:10,weight:'bold'},
-      formatter:(v)=>Math.round(v/totalRec*100)+'%'}}}});
+    options:{cutout:'58%', plugins:{datalabels:{display:true, font:{size:9,weight:'bold'}, labels:{
+      value:   {color:'#cfd6dd', align:'top',    offset:4, formatter:v=>fmt(v)},
+      percent: {color:'#fff',    align:'bottom', offset:4, formatter:v=>Math.round(v/totalRec*100)+'%'},
+    }}}}});
 
   // Groupe LabelVie vs Concurrents (own vs not-own, from raw brands)
   const g = d.groups;
+  const grpKey = ['pos','neg','boy'];
   chart('c-grprates', {type:'bar', data:{labels:g.map(r=>r.side),
     datasets:[
       {label:'Positif %', data:g.map(r=>r.pos_rate), backgroundColor:C.pos},
       {label:'Négatif %', data:g.map(r=>r.neg_rate), backgroundColor:C.neg},
       {label:'Boycott %', data:g.map(r=>r.boycott_rate), backgroundColor:C.boy},
-    ]}});
+    ]}, options:{plugins:{datalabels:{labels:{
+      percent: {color:'#f5f7fa', align:'start', anchor:'end', offset:2, font:{size:9,weight:'700'},
+        formatter:v=>(v??0)+'%'},
+      value:   {color:'#9aa4b0', align:'end', anchor:'end', offset:2, font:{size:8,weight:'600'},
+        formatter:(v,ctx)=>'('+fmt(g[ctx.dataIndex][grpKey[ctx.datasetIndex]])+')'},
+    }}}}});
 
   // Sentiment & boycott rates per displayed brand bucket
   chart('c-brandcmp', {type:'bar', data:{labels:rows.map(r=>r.label),
@@ -538,7 +564,12 @@ async function loadCompetition(){
       {label:'Positif %', data:rows.map(r=>r.pos_rate), backgroundColor:C.pos},
       {label:'Négatif %', data:rows.map(r=>r.neg_rate), backgroundColor:C.neg},
       {label:'Boycott %', data:rows.map(r=>r.boycott_rate), backgroundColor:C.boy},
-    ]}});
+    ]}, options:{plugins:{datalabels:{labels:{
+      percent: {color:'#f5f7fa', align:'start', anchor:'end', offset:2, font:{size:9,weight:'700'},
+        formatter:v=>(v??0)+'%'},
+      value:   {color:'#9aa4b0', align:'end', anchor:'end', offset:2, font:{size:8,weight:'600'},
+        formatter:(v,ctx)=>'('+fmt(rows[ctx.dataIndex][grpKey[ctx.datasetIndex]])+')'},
+    }}}}});
 
   // Engagement per displayed brand bucket
   chart('c-brandeng', {type:'bar', data:{labels:rows.map(r=>r.label),
@@ -639,9 +670,13 @@ async function loadBoycott(){
   chart('c-boybrand', {type:'bar', data:{labels:d.by_entity.map(r=>r.entity),
     datasets:[{label:'Records boycott', data:d.by_entity.map(r=>r.boycott), backgroundColor:C.boy}]},
     options:{plugins:{legend:{display:false}}}});
+  const boyPlatTotal = d.by_platform.reduce((s,r)=>s+r.boycott,0) || 1;
   chart('c-boyplat', {type:'doughnut', data:{labels:d.by_platform.map(r=>r.platform),
     datasets:[{data:d.by_platform.map(r=>r.boycott), backgroundColor:C.pal, borderColor:'#11161f', borderWidth:2}]},
-    options:{cutout:'55%'}});
+    options:{cutout:'55%', plugins:{datalabels:{display:true, font:{size:9,weight:'bold'}, labels:{
+      value:   {color:'#cfd6dd', align:'top',    offset:4, formatter:v=>fmt(v)},
+      percent: {color:'#fff',    align:'bottom', offset:4, formatter:v=>(v/boyPlatTotal*100).toFixed(1)+'%'},
+    }}}}});
   chart('c-boylang', {type:'bar', data:{labels:d.by_language.map(r=>r.language),
     datasets:[{label:'Records boycott', data:d.by_language.map(r=>r.boycott), backgroundColor:C.orange}]},
     options:{indexAxis:'y', plugins:{legend:{display:false}}}});
@@ -688,14 +723,19 @@ async function loadEngagement(){
     }, plugins:{tooltip:{callbacks:{
       label: ctx => `Engagement : ${fmt(ctx.parsed.y)}`
     }}}}});
+  const engTypeTotal = d.by_type.reduce((s,r)=>s+r.total_eng,0)||1;
   chart('c-engtype', {type:'doughnut', data:{labels:d.by_type.map(r=>r.record_type==='post'?'Post':'Commentaire'),
     datasets:[{data:d.by_type.map(r=>r.total_eng), backgroundColor:[C.own,C.orange], borderColor:'#11161f', borderWidth:2}]},
-    options:{cutout:'58%', plugins:{tooltip:{callbacks:{
-      label: ctx => {
-        const total = d.by_type.reduce((s,r)=>s+r.total_eng,0)||1;
-        return [`${ctx.label} : ${fmt(ctx.parsed)}`, `Part : ${(ctx.parsed/total*100).toFixed(1)} %`];
-      }
-    }}, legend:{position:'bottom', labels:{color:'#cfd6dd', font:{size:11}}}}});
+    options:{cutout:'58%', plugins:{
+      datalabels:{display:true, font:{size:9,weight:'bold'}, labels:{
+        value:   {color:'#cfd6dd', align:'top',    offset:4, formatter:v=>fmt(v)},
+        percent: {color:'#fff',    align:'bottom', offset:4, formatter:v=>(v/engTypeTotal*100).toFixed(1)+'%'},
+      }},
+      tooltip:{callbacks:{
+        label: ctx => {
+          return [`${ctx.label} : ${fmt(ctx.parsed)}`, `Part : ${(ctx.parsed/engTypeTotal*100).toFixed(1)} %`];
+        }
+      }}, legend:{position:'bottom', labels:{color:'#cfd6dd', font:{size:11}}}}}});
 }
 
 // ── 7. LANGUAGE ───────────────────────────────────────────────────────────────
@@ -753,7 +793,12 @@ async function loadAuthors(){
   const det = [...d].filter(r=>r.records>=2).sort((a,b)=>b.negative_pct-a.negative_pct).slice(0,10);
   chart('c-authdet', {type:'bar', data:{labels:det.map(r=>(r.author||'').slice(0,16)),
     datasets:[{label:'% Négatif', data:det.map(r=>r.negative_pct), backgroundColor:C.neg}]},
-    options:{indexAxis:'y', plugins:{legend:{display:false}}}});
+    options:{indexAxis:'y', plugins:{legend:{display:false}, datalabels:{labels:{
+      percent: {color:'#f5f7fa', align:'end', anchor:'end', offset:4, font:{size:9,weight:'700'},
+        formatter:v=>v+'%'},
+      value:   {color:'#9aa4b0', align:'start', anchor:'end', offset:-2, font:{size:8,weight:'600'},
+        formatter:(v,ctx)=>'('+fmt(det[ctx.dataIndex].negative_records)+')'},
+    }}}}});
   document.querySelector('#t-auth tbody').innerHTML = d.map(r=>`
     <tr><td><b>${r.author||''}</b></td><td>${r.platform}</td><td class="right">${r.records}</td>
     <td class="right">${fmt(r.total_engagement)}</td><td class="right">${r.avg_sentiment_score}</td>
@@ -770,7 +815,7 @@ async function loadExplorer(){
   document.getElementById('ex-count').textContent = rows.length + ' résultats';
   const sc = s => s==='Positif'?'b-pos':s==='Négatif'?'b-neg':'b-neu';
   document.querySelector('#t-comments tbody').innerHTML = rows.map(r=>`
-    <tr><td>${shortDate(r.record_date)}</td><td>${r.platform}</td><td>${r.entity}</td><td>${r.theme}</td>
+    <tr><td>${shortDate(r.record_date)}</td><td>${r.platform}</td><td>${r.source_brand||''}</td><td>${r.entity}</td><td>${r.theme}</td>
     <td><span class="badge2 ${sc(r.overall_sentiment)}">${r.overall_sentiment||''}</span></td>
     <td>${r.boycott_signal?'🚫':''}</td><td>${r.language||''}</td>
     <td style="max-width:480px;white-space:normal;">${(r.text||'').replace(/</g,'&lt;').slice(0,300)}

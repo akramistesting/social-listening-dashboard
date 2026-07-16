@@ -48,6 +48,47 @@ C_COMP = "#f97316"
 PAL    = ["#dc2626","#3b82f6","#22c55e","#f97316","#a855f7",
           "#14b8a6","#f59e0b","#ec4899","#64748b","#10b981","#6366f1"]
 
+# Couleur fixe par enseigne (identité stable, indépendante du filtre/tri) —
+# familles froides pour le groupe LabelVie, chaudes pour les concurrents, afin
+# de garder la lecture "groupe" tout en distinguant chaque marque individuelle.
+BRAND_COLORS = {
+    "LabelVie":          "#3b82f6",
+    "Carrefour":         "#0ea5e9",
+    "Carrefour Express": "#06b6d4",
+    "Carrefour Gourmet": "#6366f1",
+    "Carrefour Market":  "#8b5cf6",
+    "Suppeco":           "#14b8a6",
+    "Atacadao":          "#10b981",
+    "Marjane":           "#f97316",
+    "Marjane City":      "#f59e0b",
+    "Kazyon":            "#dc2626",
+    "BIM":               "#ec4899",
+    "HyperU":            "#eab308",
+    "Asswak Essalam":    "#a855f7",
+}
+
+
+def _brand_colors(names):
+    """Couleur fixe par nom de marque ; repli sur PAL (cyclique) si inconnue."""
+    return [BRAND_COLORS.get(n, PAL[i % len(PAL)]) for i, n in enumerate(names)]
+
+
+def _label_pie(fig):
+    """Attache le nom, la valeur absolue (gris) et le % (couleur vive) sur chaque part."""
+    values = list(fig.data[0].values)
+    total = sum(values) or 1
+    texts = [
+        f"{lbl}<br><span style='color:#9aa4b0'>{fmt(v)}</span> · "
+        f"<span style='color:#fbbf24'>{v/total*100:.1f}%</span>"
+        for lbl, v in zip(fig.data[0].labels, values)
+    ]
+    fig.update_traces(
+        text=texts, textinfo="none", textposition="outside",
+        texttemplate="%{text}",
+    )
+    fig.update_layout(uniformtext_minsize=9, uniformtext_mode="hide")
+    return fig
+
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 def check_password() -> bool:
@@ -268,7 +309,8 @@ def tab_overview(start, end, entities, platforms, types, langs, gran, source_bra
             hole=0.6,
             marker_colors=[C_POS, C_NEG, C_NEU],
         ))
-        fig2.update_layout(title="Répartition", height=280, margin=dict(t=40,b=0))
+        fig2 = _label_pie(fig2)
+        fig2.update_layout(title="Répartition", height=280, margin=dict(t=40,b=60))
         show(fig2, use_container_width=True)
 
     # Top themes + Volume par plateforme
@@ -342,7 +384,7 @@ def tab_competition(start, end, entities, platforms, types, langs, gran, source_
     else:
         brands_df["eng"] = 0
 
-    col_sov = [C_OWN if r else C_COMP for r in brands_df["is_own"]]
+    col_sov = _brand_colors(brands_df["display_name"])
 
     col1, col2 = st.columns(2)
     with col1:
@@ -350,7 +392,8 @@ def tab_competition(start, end, entities, platforms, types, langs, gran, source_
             labels=brands_df["display_name"], values=brands_df["records"],
             hole=0.55, marker_colors=col_sov,
         ))
-        fig.update_layout(title="Part de voix (mentions)", height=320, margin=dict(t=40,b=0))
+        fig = _label_pie(fig)
+        fig.update_layout(title="Part de voix (mentions)", height=380, margin=dict(t=40,b=60))
         show(fig, use_container_width=True)
     with col2:
         groups = brands_df.groupby("is_own")[["pos","neg","boy","records"]].sum().reset_index()
@@ -359,8 +402,13 @@ def tab_competition(start, end, entities, platforms, types, langs, gran, source_
         groups["neg_rate"]     = (groups["neg"] / groups["records"].clip(lower=1) * 100).round(1)
         groups["boycott_rate"] = (groups["boy"] / groups["records"].clip(lower=1) * 100).round(1)
         fig2 = go.Figure()
-        for label, col, color in [("Positif %","pos_rate",C_POS),("Négatif %","neg_rate",C_NEG),("Boycott %","boycott_rate",C_BOY)]:
-            fig2.add_trace(go.Bar(name=label, x=groups["label"], y=groups[col], marker_color=color))
+        for label, rate_col, cnt_col, color in [("Positif %","pos_rate","pos",C_POS),("Négatif %","neg_rate","neg",C_NEG),("Boycott %","boycott_rate","boy",C_BOY)]:
+            texts = [
+                f"<span style='color:{color}'>{r}%</span><br><span style='color:#9aa4b0'>({fmt(n)})</span>"
+                for r, n in zip(groups[rate_col], groups[cnt_col])
+            ]
+            fig2.add_trace(go.Bar(name=label, x=groups["label"], y=groups[rate_col], marker_color=color,
+                                   text=texts, texttemplate="%{text}", textposition="outside"))
         fig2.update_layout(title="Groupe LabelVie vs Concurrents", height=320, margin=dict(t=40,b=20))
         show(fig2, use_container_width=True)
 
@@ -376,7 +424,7 @@ def tab_competition(start, end, entities, platforms, types, langs, gran, source_
         bt_filt = bt[bt["boycott"] > 0]
         if not bt_filt.empty:
             fig3 = px.line(bt_filt, x="bucket", y="boycott", color="entity",
-                           color_discrete_sequence=PAL, markers=True)
+                           color_discrete_map=BRAND_COLORS, color_discrete_sequence=PAL, markers=True)
             fig3.update_layout(height=300, margin=dict(t=20,b=20), yaxis_title="Signaux boycott")
             show(fig3, use_container_width=True)
         else:
@@ -385,7 +433,7 @@ def tab_competition(start, end, entities, platforms, types, langs, gran, source_
     # Engagement par marque
     fig4 = px.bar(brands_df.sort_values("eng"), x="eng", y="display_name",
                   orientation="h", title="Engagement par marque",
-                  color="is_own", color_discrete_map={1: C_OWN, 0: C_COMP})
+                  color="display_name", color_discrete_map=BRAND_COLORS)
     fig4.update_layout(height=350, margin=dict(t=40,b=20), showlegend=False)
     show(fig4, use_container_width=True)
 
@@ -533,7 +581,8 @@ def tab_boycott(start, end, entities, platforms, types, langs, gran, source_bran
         if not by_platform.empty:
             fig3 = go.Figure(go.Pie(labels=by_platform["platform"], values=by_platform["boycott"],
                                     hole=0.52, marker_colors=PAL))
-            fig3.update_layout(title="Boycott par plateforme", height=300, margin=dict(t=40,b=0))
+            fig3 = _label_pie(fig3)
+            fig3.update_layout(title="Boycott par plateforme", height=340, margin=dict(t=40,b=60))
             show(fig3, use_container_width=True)
     with col3:
         if not by_lang.empty:
@@ -612,7 +661,8 @@ def tab_engagement(start, end, entities, platforms, types, langs, gran, source_b
             labels = by_type["record_type"].map({"post":"Post","comment":"Commentaire"}).fillna(by_type["record_type"])
             fig4 = go.Figure(go.Pie(labels=labels, values=by_type["total_eng"],
                                     hole=0.55, marker_colors=[C_OWN, C_COMP]))
-            fig4.update_layout(title="Post vs Commentaire", height=300, margin=dict(t=40,b=0))
+            fig4 = _label_pie(fig4)
+            fig4.update_layout(title="Post vs Commentaire", height=340, margin=dict(t=40,b=60))
             show(fig4, use_container_width=True)
 
 
