@@ -180,7 +180,7 @@ def _bucket(gran: str) -> str:
     return "record_date"
 
 def _where(start, end, entities, platforms, types, langs, extra="", source_brands=None,
-           scope="voc") -> str:
+           scope="voc", voc_override_entity=None) -> str:
     """
     scope pilote le périmètre voix-client / voix-marque via is_brand_voice :
       - "voc"   (défaut) : is_brand_voice=0 → uniquement le contenu écrit par des
@@ -190,6 +190,14 @@ def _where(start, end, entities, platforms, types, langs, extra="", source_brand
       - "all"   : aucun filtre (activité/portée : volume, engagement, part de voix).
     is_brand_voice est calculé dans fct_comment_drillthrough (authorship + contexte),
     donc le périmètre reste correct le jour où on ajoute les groupes Facebook.
+
+    voc_override_entity : dérogation ciblée pour une seule marque (ex: "CarrefourExpress"),
+    utilisée uniquement par les onglets Thèmes/Langue. Cette marque n'a pas de
+    commentaires BrightData exploitables (texte vide / non enrichi) — sous scope="voc"
+    par défaut elle apparaîtrait donc sans aucun contenu thématisé. Pour cette marque
+    précise, on bascule sur ses posts (déjà enrichis avec entité détectée par le NLP)
+    au lieu de is_brand_voice=0. Aucune autre marque n'est affectée : elles gardent
+    strictement is_brand_voice=0.
     """
     parts = ["record_date IS NOT NULL"]
     if start: parts.append(f"record_date >= '{start}'")
@@ -202,8 +210,17 @@ def _where(start, end, entities, platforms, types, langs, extra="", source_brand
         _in("language",     langs),
     ]:
         if clause: parts.append(clause)
-    if   scope == "voc":   parts.append("is_brand_voice = 0")
-    elif scope == "brand": parts.append("is_brand_voice = 1")
+    if scope == "voc":
+        if voc_override_entity:
+            ent = _esc(voc_override_entity)
+            parts.append(
+                f"((entity = '{ent}' AND record_type = 'post') "
+                f"OR (entity != '{ent}' AND is_brand_voice = 0))"
+            )
+        else:
+            parts.append("is_brand_voice = 0")
+    elif scope == "brand":
+        parts.append("is_brand_voice = 1")
     if extra: parts.append(extra)
     return " AND ".join(parts)
 
@@ -501,7 +518,8 @@ def tab_sentiment(start, end, entities, platforms, types, langs, gran, source_br
 
 def tab_themes(start, end, entities, platforms, types, langs, gran, source_brands=None):
     bkt = _bucket(gran)
-    wt  = _where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands)
+    wt  = _where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands,
+                 voc_override_entity="CarrefourExpress")
 
     freq = q(f"""
         SELECT theme, count() mentions,
@@ -667,7 +685,8 @@ def tab_engagement(start, end, entities, platforms, types, langs, gran, source_b
 
 
 def tab_language(start, end, entities, platforms, types, langs, gran, source_brands=None):
-    w = _where(start, end, entities, platforms, types, langs, "language IS NOT NULL", source_brands=source_brands)
+    w = _where(start, end, entities, platforms, types, langs, "language IS NOT NULL", source_brands=source_brands,
+               voc_override_entity="CarrefourExpress")
 
     dist = q(f"""
         SELECT language, {REC} records, {POS} positives, {NEG} negatives, {NEU} neutrals
