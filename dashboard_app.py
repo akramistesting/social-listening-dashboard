@@ -194,10 +194,11 @@ def _where(start, end, entities, platforms, types, langs, extra="", source_brand
     voc_override_entity : dérogation ciblée pour une seule marque (ex: "CarrefourExpress"),
     utilisée uniquement par les onglets Thèmes/Langue. Cette marque n'a pas de
     commentaires BrightData exploitables (texte vide / non enrichi) — sous scope="voc"
-    par défaut elle apparaîtrait donc sans aucun contenu thématisé. Pour cette marque
-    précise, on bascule sur ses posts (déjà enrichis avec entité détectée par le NLP)
-    au lieu de is_brand_voice=0. Aucune autre marque n'est affectée : elles gardent
-    strictement is_brand_voice=0.
+    par défaut elle apparaîtrait donc sans aucun contenu thématisé (et sans le thème
+    "Autre" / la langue "other", qui existent bien mais sur ses posts+commentaires).
+    Pour cette marque précise, on retire complètement le filtre is_brand_voice
+    (équivalent scope="all", posts + commentaires confondus) au lieu de is_brand_voice=0.
+    Aucune autre marque n'est affectée : elles gardent strictement is_brand_voice=0.
     """
     parts = ["record_date IS NOT NULL"]
     if start: parts.append(f"record_date >= '{start}'")
@@ -214,8 +215,7 @@ def _where(start, end, entities, platforms, types, langs, extra="", source_brand
         if voc_override_entity:
             ent = _esc(voc_override_entity)
             parts.append(
-                f"((entity = '{ent}' AND record_type = 'post') "
-                f"OR (entity != '{ent}' AND is_brand_voice = 0))"
+                f"(entity = '{ent}' OR (entity != '{ent}' AND is_brand_voice = 0))"
             )
         else:
             parts.append("is_brand_voice = 0")
