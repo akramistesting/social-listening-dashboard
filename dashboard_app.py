@@ -489,10 +489,11 @@ def tab_sentiment(start, end, entities, platforms, types, langs, gran, source_br
         fig2.update_layout(height=320, margin=dict(t=40,b=20), showlegend=False)
         show(fig2, use_container_width=True)
 
-    # Heatmap brand × theme
+    # Heatmap brand × theme — même dérogation que l'onglet Thèmes, pour rester cohérent
     hm = q(f"""
         SELECT entity, theme, round(avg(theme_score),3) avg_score, count() total
-        FROM {DT} WHERE {_where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands)}
+        FROM {DT} WHERE {_where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands,
+                                 voc_override_entity="CarrefourExpress")}
         GROUP BY entity, theme
     """)
     if not hm.empty:
