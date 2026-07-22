@@ -517,10 +517,23 @@ def tab_sentiment(start, end, entities, platforms, types, langs, gran, source_br
         show(fig3, use_container_width=True)
 
 
+def _scope_from_types(types) -> str:
+    """
+    Le filtre latéral "Type" (Post/Commentaire) pilote directement le scope
+    is_brand_voice au lieu d'être neutralisé par le scope="voc" par défaut :
+    sélectionner uniquement "post" doit montrer les posts (is_brand_voice=1),
+    pas un résultat vide. Choix ambigu (aucun filtre, ou les deux à la fois)
+    → comportement inchangé ("voc", commentaires).
+    """
+    if types == ["post"]:
+        return "brand"
+    return "voc"
+
+
 def tab_themes(start, end, entities, platforms, types, langs, gran, source_brands=None):
     bkt = _bucket(gran)
     wt  = _where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands,
-                 voc_override_entity="CarrefourExpress")
+                 scope=_scope_from_types(types), voc_override_entity="CarrefourExpress")
 
     freq = q(f"""
         SELECT theme, count() mentions,
@@ -687,7 +700,7 @@ def tab_engagement(start, end, entities, platforms, types, langs, gran, source_b
 
 def tab_language(start, end, entities, platforms, types, langs, gran, source_brands=None):
     w = _where(start, end, entities, platforms, types, langs, "language IS NOT NULL", source_brands=source_brands,
-               voc_override_entity="CarrefourExpress")
+               scope=_scope_from_types(types), voc_override_entity="CarrefourExpress")
 
     dist = q(f"""
         SELECT language, {REC} records, {POS} positives, {NEG} negatives, {NEU} neutrals
