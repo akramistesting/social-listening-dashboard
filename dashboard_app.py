@@ -517,28 +517,10 @@ def tab_sentiment(start, end, entities, platforms, types, langs, gran, source_br
         show(fig3, use_container_width=True)
 
 
-# Options du sélecteur "Auteur" partagé par les onglets Thèmes/Langue — mêmes
-# libellés/valeurs que celui d'Explorer (is_brand_voice : 0=commentaires, 1=posts).
-_AUTHOR_SCOPE_OPTS = {
-    "Voix client (commentaires)": "voc",
-    "Contenu de la marque (posts)": "brand",
-    "Tout": "all",
-}
-
-def _author_scope_selector(key: str) -> str:
-    sel = st.selectbox("Auteur", list(_AUTHOR_SCOPE_OPTS.keys()), key=key,
-                        help="Voix client = commentaires (is_brand_voice=0). "
-                             "Contenu de la marque = posts (is_brand_voice=1). "
-                             "Carrefour Express garde son affichage habituel quel "
-                             "que soit ce choix (dérogation dédiée).")
-    return _AUTHOR_SCOPE_OPTS[sel]
-
-
 def tab_themes(start, end, entities, platforms, types, langs, gran, source_brands=None):
-    bkt   = _bucket(gran)
-    scope = _author_scope_selector("themes_author_scope")
-    wt    = _where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands,
-                    scope=scope, voc_override_entity="CarrefourExpress")
+    bkt = _bucket(gran)
+    wt  = _where(start, end, entities, platforms, types, langs, "theme != ''", source_brands=source_brands,
+                 voc_override_entity="CarrefourExpress")
 
     freq = q(f"""
         SELECT theme, count() mentions,
@@ -704,9 +686,8 @@ def tab_engagement(start, end, entities, platforms, types, langs, gran, source_b
 
 
 def tab_language(start, end, entities, platforms, types, langs, gran, source_brands=None):
-    scope = _author_scope_selector("langue_author_scope")
     w = _where(start, end, entities, platforms, types, langs, "language IS NOT NULL", source_brands=source_brands,
-               scope=scope, voc_override_entity="CarrefourExpress")
+               voc_override_entity="CarrefourExpress")
 
     dist = q(f"""
         SELECT language, {REC} records, {POS} positives, {NEG} negatives, {NEU} neutrals
